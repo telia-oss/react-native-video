@@ -39,6 +39,7 @@ export type OnLoadData = Readonly<{
     bitrate?: number;
     type?: string;
     selected?: boolean;
+    roleFlags: string[];
   }[];
   textTracks: {
     index: number;
@@ -49,6 +50,7 @@ export type OnLoadData = Readonly<{
      */
     type?: WithDefault<'srt' | 'ttml' | 'vtt', 'srt'>;
     selected?: boolean;
+    roleFlags: string[];
   }[];
   videoTracks: {
     index: number;
