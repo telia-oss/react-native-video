@@ -8,6 +8,7 @@ class Track {
     var mimeType: String? = null
     var language: String? = null
     var isSelected = false
+    var roleFlags: List<String> = emptyList()
 
     // in bps available only on audio tracks
     var bitrate = 0

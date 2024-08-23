@@ -296,6 +296,7 @@ class VideoEventEmitter {
                         format.language?.let { putString("language", it) }
                         if (format.bitrate > 0) putInt("bitrate", format.bitrate)
                         putBoolean("selected", format.isSelected)
+                        putArray("roleFlags", roleFlagsToArray(format.roleFlags))
                     }
                 )
             }
@@ -329,9 +330,15 @@ class VideoEventEmitter {
                         putString("type", format.mimeType)
                         putString("language", format.language)
                         putBoolean("selected", format.isSelected)
+                        putArray("roleFlags", roleFlagsToArray(format.roleFlags))
                     }
                 )
             }
+        }
+
+    private fun roleFlagsToArray(roleFlags: List<String>): WritableArray =
+        Arguments.createArray().apply {
+            roleFlags.forEach { roleFlag -> pushString(roleFlag) }
         }
 
     private fun aspectRatioToNaturalSize(videoWidth: Int, videoHeight: Int): WritableMap =
