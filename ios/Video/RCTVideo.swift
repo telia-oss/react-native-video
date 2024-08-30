@@ -1425,6 +1425,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                                    ],
                                    "audioTracks": audioTracks,
                                    "textTracks": self._textTracks?.compactMap { $0.json } ?? textTracks.map(\.json),
+                                   "videoTracks": [AnyObject](),
                                    "target": self.reactTag as Any])
             }
 
