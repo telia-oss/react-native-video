@@ -148,6 +148,11 @@ enum RCTVideoUtils {
             }
             let language: String! = currentOption?.extendedLanguageTag ?? ""
 
+            var roleFlags = [String]()
+            if (currentOption?.hasMediaCharacteristic(AVMediaCharacteristic.describesVideoForAccessibility) == true) {
+                roleFlags.append("describes-video")
+            }
+
             let selectedOption: AVMediaSelectionOption? = player.currentItem?.currentMediaSelection.selectedMediaOption(in: group!)
 
             let audioTrack = [
@@ -155,6 +160,7 @@ enum RCTVideoUtils {
                 "title": title,
                 "language": language ?? "",
                 "selected": currentOption?.displayName == selectedOption?.displayName,
+                "roleFlags": roleFlags,
             ] as [String: Any]
             audioTracks.add(audioTrack)
         }
@@ -179,6 +185,21 @@ enum RCTVideoUtils {
                 title = value as! String
             }
             let language: String! = currentOption?.extendedLanguageTag ?? ""
+
+            var roleFlags = [String]()
+            if (currentOption?.hasMediaCharacteristic(AVMediaCharacteristic.describesVideoForAccessibility) == true) {
+                roleFlags.append("describes-video")
+            }
+            if (currentOption?.hasMediaCharacteristic(AVMediaCharacteristic.describesMusicAndSoundForAccessibility) == true) {
+                roleFlags.append("describes-music-and-sound")
+            }
+            if (currentOption?.hasMediaCharacteristic(AVMediaCharacteristic.dubbedTranslation) == true) {
+                roleFlags.append("dubbed")
+            }
+            if (currentOption?.hasMediaCharacteristic(AVMediaCharacteristic.transcribesSpokenDialogForAccessibility) == true) {
+                roleFlags.append("transcribes-spoken-dialog")
+            }
+
             let selectedOpt = player.currentItem?.currentMediaSelection
             let selectedOption: AVMediaSelectionOption? = player.currentItem?.currentMediaSelection.selectedMediaOption(in: group!)
             let textTrack = TextTrack([
@@ -186,6 +207,7 @@ enum RCTVideoUtils {
                 "title": title,
                 "language": language,
                 "selected": currentOption?.displayName == selectedOption?.displayName,
+                "roleFlags": roleFlags,
             ])
             textTracks.append(textTrack)
         }
