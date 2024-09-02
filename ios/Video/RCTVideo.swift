@@ -87,6 +87,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     /* IMA Ads */
     private var _adTagUrl: String?
+    private var _adLanguage: String?
     #if USE_GOOGLE_IMA
         private var _imaAdsManager: RCTIMAAdsManager!
         /* Playhead used by the SDK to track content video progress and insert mid-rolls. */
@@ -284,9 +285,18 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     // MARK: - App lifecycle handlers
 
+    func getIsExternalPlaybackActive() -> Bool {
+        #if os(visionOS)
+            let isExternalPlaybackActive = false
+        #else
+            let isExternalPlaybackActive = _player?.isExternalPlaybackActive ?? false
+        #endif
+        return isExternalPlaybackActive
+    }
+
     @objc
     func applicationWillResignActive(notification _: NSNotification!) {
-        let isExternalPlaybackActive = _player?.isExternalPlaybackActive ?? false
+        let isExternalPlaybackActive = getIsExternalPlaybackActive()
         if _playInBackground || _playWhenInactive || !_isPlaying || isExternalPlaybackActive { return }
 
         _player?.pause()
@@ -295,7 +305,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     @objc
     func applicationDidBecomeActive(notification _: NSNotification!) {
-        let isExternalPlaybackActive = _player?.isExternalPlaybackActive ?? false
+        let isExternalPlaybackActive = getIsExternalPlaybackActive()
         if _playInBackground || _playWhenInactive || !_isPlaying || isExternalPlaybackActive { return }
 
         // Resume the player or any other tasks that should continue when the app becomes active.
@@ -305,7 +315,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     @objc
     func applicationDidEnterBackground(notification _: NSNotification!) {
-        let isExternalPlaybackActive = _player?.isExternalPlaybackActive ?? false
+        let isExternalPlaybackActive = getIsExternalPlaybackActive()
         if !_playInBackground || isExternalPlaybackActive || isPipActive() { return }
         // Needed to play sound in background. See https://developer.apple.com/library/ios/qa/qa1668/_index.html
         _playerLayer?.player = nil
@@ -488,7 +498,17 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                 NowPlayingInfoCenterManager.shared.registerPlayer(player: _player!)
             }
         } else {
+            if #available(iOS 16.0, *) {
+                // This feature caused crashes, if the app was put in bg, before the source change
+                // https://github.com/TheWidlarzGroup/react-native-video/issues/3900
+                self._playerViewController?.allowsVideoFrameAnalysis = false
+            }
+
             _player?.replaceCurrentItem(with: playerItem)
+
+            if #available(iOS 16.0, *) {
+                self._playerViewController?.allowsVideoFrameAnalysis = true
+            }
 
             // later we can just call "updateNowPlayingInfo:
             NowPlayingInfoCenterManager.shared.updateNowPlayingInfo()
@@ -1202,6 +1222,10 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     }
 
     // MARK: - RCTIMAAdsManager
+
+    func getAdLanguage() -> String? {
+        return _adLanguage
+    }
 
     func getAdTagUrl() -> String? {
         return _adTagUrl
