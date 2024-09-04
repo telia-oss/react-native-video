@@ -212,6 +212,7 @@ export type OnAudioTracksData = Readonly<{
     bitrate?: Float;
     type?: string;
     selected?: boolean;
+    roleFlags: string[];
   }[];
 }>;
 

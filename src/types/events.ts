@@ -73,6 +73,7 @@ export type OnTextTracksData = Readonly<{
      */
     type?: WithDefault<string, 'srt'>;
     selected?: boolean;
+    roleFlags: string[];
   }[];
 }>;
 
