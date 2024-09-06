@@ -168,6 +168,7 @@ export type SubtitleStyle = {
   paddingLeft?: number;
   paddingRight?: number;
   opacity?: number;
+  subtitlesFollowVideo?: boolean;
 };
 
 export enum TextTrackType {
@@ -247,6 +248,8 @@ export type ControlsStyles = {
   hideSeekBar?: boolean;
   hideDuration?: boolean;
   seekIncrementMS?: number;
+  hideNavigationBarOnFullScreenMode?: boolean;
+  hideNotificationBarOnFullScreenMode?: boolean;
 };
 
 export interface ReactVideoProps extends ReactVideoEvents, ViewProps {

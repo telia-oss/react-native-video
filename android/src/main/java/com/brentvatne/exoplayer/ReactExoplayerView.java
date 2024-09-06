@@ -7,7 +7,6 @@ import static androidx.media3.common.C.CONTENT_TYPE_RTSP;
 import static androidx.media3.common.C.CONTENT_TYPE_SS;
 import static androidx.media3.common.C.TIME_END_OF_SOURCE;
 
-
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
@@ -24,7 +23,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.TextUtils;
 import android.view.View;
-import android.view.Window;
 import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
@@ -34,9 +32,6 @@ import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.Format;
@@ -131,18 +126,17 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.UiThreadUtil;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.google.ads.interactivemedia.v3.api.AdError;
-import com.google.ads.interactivemedia.v3.api.AdEvent;
 import com.google.ads.interactivemedia.v3.api.AdErrorEvent;
-import com.google.ads.interactivemedia.v3.api.ImaSdkSettings;
+import com.google.ads.interactivemedia.v3.api.AdEvent;
 import com.google.ads.interactivemedia.v3.api.ImaSdkFactory;
+import com.google.ads.interactivemedia.v3.api.ImaSdkSettings;
 import com.google.common.collect.ImmutableList;
 
 import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
-import java.lang.Math;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -191,8 +185,6 @@ public class ReactExoplayerView extends FrameLayout implements
     private ExoPlayer player;
     private DefaultTrackSelector trackSelector;
     private boolean playerNeedsSource;
-    private MediaMetadata customMetadata;
-
     private ServiceConnection playbackServiceConnection;
     private PlaybackServiceBinder playbackServiceBinder;
 
@@ -205,7 +197,6 @@ public class ReactExoplayerView extends FrameLayout implements
     private long resumePosition;
     private boolean loadVideoStarted;
     private boolean isFullscreen;
-    private boolean originalFitsSystemWindows;
     private boolean isInBackground;
     private boolean isPaused;
     private boolean isBuffering;
@@ -271,7 +262,7 @@ public class ReactExoplayerView extends FrameLayout implements
 
     private boolean viewHasDropped = false;
 
-    private String instanceId = String.valueOf(UUID.randomUUID());
+    private final String instanceId = String.valueOf(UUID.randomUUID());
 
     private CmcdConfiguration.Factory cmcdConfigurationFactory;
 
@@ -432,15 +423,6 @@ public class ReactExoplayerView extends FrameLayout implements
                 @Override
                 public void onVisibilityChange(int visibility) {
                     eventEmitter.onControlsVisibilityChange.invoke(visibility == View.VISIBLE);
-                }
-            });
-        }
-
-        if (fullScreenPlayerView == null) {
-            fullScreenPlayerView = new FullScreenPlayerView(getContext(), exoPlayerView, this, playerControlView, new OnBackPressedCallback(true) {
-                @Override
-                public void handleOnBackPressed() {
-                    setFullscreen(false);
                 }
             });
         }
@@ -1028,7 +1010,7 @@ public class ReactExoplayerView extends FrameLayout implements
                 .setUri(uri);
 
         // refresh custom Metadata
-        customMetadata = ConfigurationUtils.buildCustomMetadata(source.getMetadata());
+        MediaMetadata customMetadata = ConfigurationUtils.buildCustomMetadata(source.getMetadata());
         if (customMetadata != null) {
             mediaItemBuilder.setMediaMetadata(customMetadata);
         }
@@ -1752,7 +1734,10 @@ public class ReactExoplayerView extends FrameLayout implements
         playerNeedsSource = true;
         if (isBehindLiveWindow(e)) {
             clearResumePosition();
-            initializePlayer();
+            if (player != null) {
+                player.seekToDefaultPosition();
+                player.prepare();
+            }
         } else {
             updateResumePosition();
         }
@@ -1941,7 +1926,7 @@ public class ReactExoplayerView extends FrameLayout implements
         } else if ("title".equals(type)) {
             for (int i = 0; i < groups.length; ++i) {
                 Format format = groups.get(i).getFormat(0);
-                if (format.id != null && format.id.equals(value)) {
+                if (format.label != null && format.label.equals(value)) {
                     groupIndex = i;
                     break;
                 }
@@ -2270,18 +2255,18 @@ public class ReactExoplayerView extends FrameLayout implements
             return;
         }
 
-        Window window = activity.getWindow();
-        WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(window, window.getDecorView());
         if (isFullscreen) {
+            fullScreenPlayerView = new FullScreenPlayerView(getContext(), exoPlayerView, this, playerControlView, new OnBackPressedCallback(true) {
+                @Override
+                public void handleOnBackPressed() {
+                    setFullscreen(false);
+                }
+            }, controlsConfig);
             eventEmitter.onVideoFullscreenPlayerWillPresent.invoke();
             if (fullScreenPlayerView != null) {
                 fullScreenPlayerView.show();
             }
             UiThreadUtil.runOnUiThread(() -> {
-                originalFitsSystemWindows = window.getDecorView().getFitsSystemWindows();
-                WindowCompat.setDecorFitsSystemWindows(window, false);
-                controller.hide(WindowInsetsCompat.Type.systemBars());
-                controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 eventEmitter.onVideoFullscreenPlayerDidPresent.invoke();
             });
         } else {
@@ -2292,8 +2277,6 @@ public class ReactExoplayerView extends FrameLayout implements
                 setControls(controls);
             }
             UiThreadUtil.runOnUiThread(() -> {
-                WindowCompat.setDecorFitsSystemWindows(window, originalFitsSystemWindows);
-                controller.show(WindowInsetsCompat.Type.systemBars());
                 eventEmitter.onVideoFullscreenPlayerDidDismiss.invoke();
             });
         }

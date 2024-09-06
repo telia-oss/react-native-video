@@ -2,13 +2,18 @@ import {
   BufferConfig,
   DRMType,
   ISO639_1,
+  SelectedTrackType,
   TextTrackType,
 } from 'react-native-video';
 import {SampleVideoSource} from '../types';
 import {localeVideo} from '../assets';
 import {Platform} from 'react-native';
 
-export const textTracksSelectionBy = 'index';
+// This constant allows to change how the sample behaves regarding to texts selection.
+// You can change it to change how selector will use tracks information.
+// by default, index will be displayed and index will be applied to selected tracks.
+// You can also use LANGUAGE or TITLE 
+export const textTracksSelectionBy = SelectedTrackType.INDEX;
 
 export const isIos = Platform.OS === 'ios';
 
@@ -77,6 +82,11 @@ export const srcAllPlatformList = [
     description: 'sintel starts at 20sec',
     uri: 'https://bitmovin-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
     startPosition: 50000,
+  },
+  {
+    description: 'mp3 with texttrack',
+    uri: 'https://traffic.libsyn.com/democracynow/wx2024-0702_SOT_DeadCalm-LucileSmith-FULL-V2.mxf-audio.mp3', // an mp3 file
+    textTracks: [], // empty text track list
   },
   {
     description: 'BigBugBunny sideLoaded subtitles',

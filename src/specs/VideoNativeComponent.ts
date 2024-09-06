@@ -131,6 +131,7 @@ type SubtitleStyle = Readonly<{
   paddingLeft?: WithDefault<Float, 0>;
   paddingRight?: WithDefault<Float, 0>;
   opacity?: WithDefault<Float, 1>;
+  subtitlesFollowVideo?: WithDefault<boolean, true>;
 }>;
 
 type OnLoadData = Readonly<{
@@ -297,9 +298,11 @@ export type OnAudioFocusChangedData = Readonly<{
 }>;
 
 type ControlsStyles = Readonly<{
-  hideSeekBar?: boolean;
-  hideDuration?: boolean;
+  hideSeekBar?: WithDefault<boolean, false>;
+  hideDuration?: WithDefault<boolean, false>;
   seekIncrementMS?: Int32;
+  hideNavigationBarOnFullScreenMode?: WithDefault<boolean, true>;
+  hideNotificationBarOnFullScreenMode?: WithDefault<boolean, true>;
 }>;
 
 export type OnControlsVisibilityChange = Readonly<{

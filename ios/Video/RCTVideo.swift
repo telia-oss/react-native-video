@@ -42,7 +42,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     private var _repeat = false
     private var _isPlaying = false
     private var _allowsExternalPlayback = true
-    private var _textTracks: [TextTrack]?
+    private var _textTracks: [TextTrack] = []
     private var _selectedTextTrackCriteria: SelectedTrackCriteria?
     private var _selectedAudioTrackCriteria: SelectedTrackCriteria?
     private var _playbackStalled = false
@@ -498,18 +498,19 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                 NowPlayingInfoCenterManager.shared.registerPlayer(player: _player!)
             }
         } else {
-            if #available(iOS 16.0, *) {
-                // This feature caused crashes, if the app was put in bg, before the source change
-                // https://github.com/TheWidlarzGroup/react-native-video/issues/3900
-                self._playerViewController?.allowsVideoFrameAnalysis = false
-            }
-
+            #if !os(tvOS)
+                if #available(iOS 16.0, *) {
+                    // This feature caused crashes, if the app was put in bg, before the source change
+                    // https://github.com/TheWidlarzGroup/react-native-video/issues/3900
+                    self._playerViewController?.allowsVideoFrameAnalysis = false
+                }
+            #endif
             _player?.replaceCurrentItem(with: playerItem)
-
-            if #available(iOS 16.0, *) {
-                self._playerViewController?.allowsVideoFrameAnalysis = true
-            }
-
+            #if !os(tvOS)
+                if #available(iOS 16.0, *) {
+                    self._playerViewController?.allowsVideoFrameAnalysis = true
+                }
+            #endif
             // later we can just call "updateNowPlayingInfo:
             NowPlayingInfoCenterManager.shared.updateNowPlayingInfo()
         }
@@ -598,7 +599,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     }
 
     func playerItemPrepareText(asset: AVAsset!, assetOptions: NSDictionary?, uri: String) async -> AVPlayerItem {
-        if (self._textTracks == nil) || self._textTracks?.isEmpty == true || (uri.hasSuffix(".m3u8")) {
+        if self._textTracks.isEmpty == true || (uri.hasSuffix(".m3u8")) {
             return await self.playerItemPropegateMetadata(AVPlayerItem(asset: asset))
         }
 
@@ -612,7 +613,11 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             textTracks: self._textTracks
         )
 
-        if validTextTracks.count != self._textTracks?.count {
+        if validTextTracks.isEmpty {
+            DebugLog("Strange state, not valid textTrack")
+        }
+
+        if validTextTracks.count != self._textTracks.count {
             self.setTextTracks(validTextTracks)
         }
 
@@ -928,9 +933,12 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             setMaxBitRate(_maxBitRate)
         }
 
+        if _selectedTextTrackCriteria != nil {
+            setSelectedTextTrack(_selectedTextTrackCriteria)
+        }
+
         setAudioOutput(_audioOutput)
         setSelectedAudioTrack(_selectedAudioTrackCriteria)
-        setSelectedTextTrack(_selectedTextTrackCriteria)
         setResizeMode(_resizeMode)
         setRepeat(_repeat)
         setControls(_controls)
@@ -963,8 +971,8 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     func setSelectedTextTrack(_ selectedTextTrack: SelectedTrackCriteria?) {
         _selectedTextTrackCriteria = selectedTextTrack
-        if _textTracks != nil { // sideloaded text tracks
-            RCTPlayerOperations.setSideloadedText(player: _player, textTracks: _textTracks!, criteria: _selectedTextTrackCriteria)
+        if !_textTracks.isEmpty { // sideloaded text tracks
+            RCTPlayerOperations.setSideloadedText(player: _player, textTracks: _textTracks, criteria: _selectedTextTrackCriteria)
         } else { // text tracks included in the HLS playlist§
             Task {
                 await RCTPlayerOperations.setMediaSelectionTrackForCharacteristic(player: _player, characteristic: AVMediaCharacteristic.legible,
@@ -979,8 +987,11 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     }
 
     func setTextTracks(_ textTracks: [TextTrack]?) {
-        _textTracks = textTracks
-
+        if textTracks == nil {
+            _textTracks = []
+        } else {
+            _textTracks = textTracks!
+        }
         // in case textTracks was set after selectedTextTrack
         if _selectedTextTrackCriteria != nil { setSelectedTextTrack(_selectedTextTrackCriteria) }
     }
@@ -1294,7 +1305,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         _playerItem = nil
         _source = nil
         _chapters = nil
-        _textTracks = nil
+        _textTracks = []
         _selectedTextTrackCriteria = nil
         _selectedAudioTrackCriteria = nil
         _presentingViewController = nil
@@ -1390,6 +1401,20 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         }
     }
 
+    func extractJsonWithIndex(from tracks: [TextTrack]) -> [NSDictionary]? {
+        if tracks.isEmpty {
+            // No tracks, need to return nil to handle
+            return nil
+        }
+        // Map each enumerated pair to include the index in the json dictionary
+        let mappedTracks = tracks.enumerated().compactMap { index, track -> NSDictionary? in
+            guard let json = track.json?.mutableCopy() as? NSMutableDictionary else { return nil }
+            json["index"] = index // Insert the index into the json dictionary
+            return json
+        }
+        return mappedTracks
+    }
+
     func handleReadyToPlay() {
         guard let _playerItem else { return }
 
@@ -1448,7 +1473,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                                        "orientation": orientation,
                                    ],
                                    "audioTracks": audioTracks,
-                                   "textTracks": self._textTracks?.compactMap { $0.json } ?? textTracks.map(\.json),
+                                   "textTracks": extractJsonWithIndex(from: _textTracks) ?? textTracks.map(\.json),
                                    "videoTracks": [AnyObject](),
                                    "target": self.reactTag as Any])
             }
@@ -1640,14 +1665,14 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         }
 
         guard let lastEvent = accessLog.events.last else { return }
-        onVideoBandwidthUpdate?(["bitrate": lastEvent.observedBitrate, "target": reactTag])
+        onVideoBandwidthUpdate?(["bitrate": lastEvent.indicatedBitrate, "target": reactTag])
     }
 
     func handleTracksChange(playerItem _: AVPlayerItem, change _: NSKeyValueObservedChange<[AVPlayerItemTrack]>) {
         if onTextTracks != nil {
             Task {
                 let textTracks = await RCTVideoUtils.getTextTrackInfo(self._player)
-                self.onTextTracks?(["textTracks": self._textTracks?.compactMap { $0.json } ?? textTracks.compactMap(\.json)])
+                self.onTextTracks?(["textTracks": extractJsonWithIndex(from: _textTracks) ?? textTracks.compactMap(\.json)])
             }
         }
 
