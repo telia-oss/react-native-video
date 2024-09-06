@@ -162,9 +162,11 @@ type OnLoadData = Readonly<{
 }>;
 
 export type OnLoadStartData = Readonly<{
-  isNetwork: boolean;
-  type: string;
-  uri: string;
+  src: {
+    isNetwork: boolean;
+    type: string;
+    uri: string;
+  };
 }>;
 
 export type OnVideoAspectRatioData = Readonly<{
