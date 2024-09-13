@@ -216,6 +216,7 @@ export type OnAudioTracksData = Readonly<{
     type?: string;
     selected?: boolean;
     roleFlags: string[];
+    isSupported: boolean;
   }[];
 }>;
 

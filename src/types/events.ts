@@ -40,6 +40,7 @@ export type OnLoadData = Readonly<{
     type?: string;
     selected?: boolean;
     roleFlags: string[];
+    isSupported: boolean;
   }[];
   textTracks: {
     index: number;

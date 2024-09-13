@@ -297,6 +297,7 @@ class VideoEventEmitter {
                         if (format.bitrate > 0) putInt("bitrate", format.bitrate)
                         putBoolean("selected", format.isSelected)
                         putArray("roleFlags", roleFlagsToArray(format.roleFlags))
+                        putBoolean("isSupported", format.isSupported)
                     }
                 )
             }

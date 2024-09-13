@@ -1462,27 +1462,34 @@ public class ReactExoplayerView extends FrameLayout implements
 
     private ArrayList<Track> getAudioTrackInfo() {
         ArrayList<Track> audioTracks = new ArrayList<>();
-        if (trackSelector == null) {
-            // Likely player is unmounting so no audio tracks are available anymore
-            return audioTracks;
+
+        if (player.isCommandAvailable(Player.COMMAND_GET_TRACKS)) {
+            Tracks currentTracks = player.getCurrentTracks();
+            for (Tracks.Group trackGroup : currentTracks.getGroups()) {
+                @C.TrackType int trackType = trackGroup.getType();
+
+                if (trackType == C.TRACK_TYPE_AUDIO) {
+                    for (int i = 0; i < trackGroup.length; i++) {
+                        boolean isSupported = trackGroup.isTrackSupported(i);
+                        boolean isSelected = trackGroup.isTrackSelected(i);
+                        Format trackFormat = trackGroup.getTrackFormat(i);
+
+                        Track track = new Track();
+                        track.setIndex(i);
+                        if (trackFormat.sampleMimeType != null)
+                            track.setMimeType(trackFormat.sampleMimeType);
+                        if (trackFormat.language != null) track.setLanguage(trackFormat.language);
+                        if (trackFormat.label != null) track.setTitle(trackFormat.label);
+                        track.setSelected(isSelected);
+                        track.setRoleFlags(Util.getRoleFlagStrings(trackFormat.roleFlags));
+                        track.setSupported(isSupported);
+                        track.setBitrate(trackFormat.bitrate == Format.NO_VALUE ? 0 : trackFormat.bitrate);
+                        audioTracks.add(track);
+                    }
+                }
+            }
         }
 
-        MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
-        int index = getTrackRendererIndex(C.TRACK_TYPE_AUDIO);
-        if (info == null || index == C.INDEX_UNSET) {
-            return audioTracks;
-        }
-        TrackGroupArray groups = info.getTrackGroups(index);
-        TrackSelectionArray selectionArray = player.getCurrentTrackSelections();
-        TrackSelection selection = selectionArray.get( C.TRACK_TYPE_AUDIO );
-
-        for (int i = 0; i < groups.length; ++i) {
-            TrackGroup group = groups.get(i);
-            Format format = group.getFormat(0);
-            Track audioTrack = exoplayerTrackToGenericTrack(format, i, selection, group);
-            audioTrack.setBitrate(format.bitrate == Format.NO_VALUE ? 0 : format.bitrate);
-            audioTracks.add(audioTrack);
-        }
         return audioTracks;
     }
 

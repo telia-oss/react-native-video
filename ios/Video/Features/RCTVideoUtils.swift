@@ -161,6 +161,7 @@ enum RCTVideoUtils {
                 "language": language ?? "",
                 "selected": currentOption?.displayName == selectedOption?.displayName,
                 "roleFlags": roleFlags,
+                "isSupported": true
             ] as [String: Any]
             audioTracks.add(audioTrack)
         }
