@@ -38,10 +38,12 @@ export type VideoSrc = Readonly<{
   startPosition?: Float;
   cropStart?: Float;
   cropEnd?: Float;
+  contentStartTime?: Int32; // Android
   metadata?: VideoMetadata;
   drm?: Drm;
   cmcd?: NativeCmcdConfiguration; // android
   textTracksAllowChunklessPreparation?: boolean; // android
+  textTracks?: TextTracks;
 }>;
 
 type DRMType = WithDefault<string, 'widevine'>;
@@ -60,6 +62,7 @@ type Drm = Readonly<{
   base64Certificate?: boolean; // ios default: false
   useExternalGetLicense?: boolean; // ios
   multiDrm?: WithDefault<boolean, false>; // android
+  localSourceEncryptionKeyScheme?: string; // ios
 }>;
 
 type CmcdMode = WithDefault<Int32, 1>;
@@ -322,7 +325,6 @@ export interface VideoNativeProps extends ViewProps {
   automaticallyWaitsToMinimizeStalling?: boolean;
   shutterColor?: Int32;
   audioOutput?: WithDefault<string, 'speaker'>;
-  textTracks?: TextTracks;
   selectedTextTrack?: SelectedTextTrack;
   selectedAudioTrack?: SelectedAudioTrack;
   selectedVideoTrack?: SelectedVideoTrack; // android
@@ -345,11 +347,9 @@ export interface VideoNativeProps extends ViewProps {
   fullscreenOrientation?: WithDefault<string, 'all'>;
   progressUpdateInterval?: Float;
   restoreUserInterfaceForPIPStopCompletionHandler?: boolean;
-  localSourceEncryptionKeyScheme?: string;
   debug?: DebugConfig;
   showNotificationControls?: WithDefault<boolean, false>; // Android, iOS
   bufferConfig?: BufferConfig; // Android
-  contentStartTime?: Int32; // Android
   currentPlaybackTime?: Double; // Android
   disableDisconnectError?: boolean; // Android
   focusable?: boolean; // Android
