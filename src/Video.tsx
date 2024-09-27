@@ -394,12 +394,9 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
       return NativeVideoManager.getCurrentPosition(getReactTag(nativeRef));
     }, []);
 
-    const restoreUserInterfaceForPictureInPictureStopCompleted = useCallback(
-      (restored: boolean) => {
-        setRestoreUserInterfaceForPIPStopCompletionHandler(restored);
-      },
-      [setRestoreUserInterfaceForPIPStopCompletionHandler],
-    );
+    const restoreUserInterfaceForPictureInPictureStopCompleted = (restored: boolean) => {
+      nativeRef.current?.setNativeProps({ restoreUserInterfaceForPIPStopCompletionHandler: restored })
+    };
 
     const onVideoLoadStart = useCallback(
       (e: NativeSyntheticEvent<OnLoadStartData>) => {
