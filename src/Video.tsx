@@ -152,11 +152,6 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
 
     const [showPoster, setShowPoster] = useState(hasPoster);
 
-    const [
-      _restoreUserInterfaceForPIPStopCompletionHandler,
-      setRestoreUserInterfaceForPIPStopCompletionHandler,
-    ] = useState<boolean | undefined>();
-
     const src = useMemo<VideoSrc | undefined>(() => {
       if (!source) {
         return undefined;
@@ -758,9 +753,6 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
           src={src}
           style={_style}
           resizeMode={resizeMode}
-          restoreUserInterfaceForPIPStopCompletionHandler={
-            _restoreUserInterfaceForPIPStopCompletionHandler
-          }
           selectedTextTrack={_selectedTextTrack}
           selectedAudioTrack={_selectedAudioTrack}
           selectedVideoTrack={_selectedVideoTrack}
