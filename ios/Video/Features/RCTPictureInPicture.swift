@@ -76,7 +76,7 @@ import React
             guard let _pipController else { return }
 
             if _isActive && !_pipController.isPictureInPictureActive {
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     _pipController.startPictureInPicture()
                 }
             } else if !_isActive && _pipController.isPictureInPictureActive {
