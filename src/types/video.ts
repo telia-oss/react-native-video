@@ -24,6 +24,7 @@ export type ReactVideoSourceProperties = {
   uri?: string;
   isNetwork?: boolean;
   isAsset?: boolean;
+  isLocalAssetFile?: boolean;
   shouldCache?: boolean;
   type?: string;
   mainVer?: number;
@@ -38,6 +39,9 @@ export type ReactVideoSourceProperties = {
   cmcd?: Cmcd; // android
   textTracksAllowChunklessPreparation?: boolean;
   textTracks?: TextTracks;
+  ad?: AdConfig;
+  minLoadRetryCount?: number; // Android
+  bufferConfig?: BufferConfig;
 };
 
 export type ReactVideoSource = Readonly<
@@ -72,6 +76,11 @@ export enum DRMType {
   CLEARKEY = 'clearkey',
   FAIRPLAY = 'fairplay',
 }
+
+export type AdConfig = Readonly<{
+  adTagUrl?: string;
+  adLanguage?: ISO639_1;
+}>;
 
 export type Drm = Readonly<{
   type?: DRMType;
@@ -260,6 +269,7 @@ export type ControlsStyles = {
   hideFullscreen?: boolean;
   hideNavigationBarOnFullScreenMode?: boolean;
   hideNotificationBarOnFullScreenMode?: boolean;
+  hideSettingButton?: boolean;
   seekIncrementMS?: number;
   liveLabel?: string;
 };
@@ -275,10 +285,13 @@ export interface ReactVideoProps extends ReactVideoEvents, ViewProps {
   /** @deprecated Use source.drm */
   drm?: Drm;
   style?: StyleProp<ViewStyle>;
+  /** @deprecated Use source.ad.adTagUrl */
   adTagUrl?: string;
+  /** @deprecated Use source.ad.adLanguage */
   adLanguage?: ISO639_1;
   audioOutput?: AudioOutput; // Mobile
   automaticallyWaitsToMinimizeStalling?: boolean; // iOS
+  /** @deprecated Use source.bufferConfig */
   bufferConfig?: BufferConfig; // Android
   bufferingStrategy?: BufferingStrategyType;
   chapters?: Chapters[]; // iOS
@@ -296,12 +309,13 @@ export interface ReactVideoProps extends ReactVideoEvents, ViewProps {
   fullscreenOrientation?: EnumValues<FullscreenOrientationType>; // iOS
   hideShutterView?: boolean; //	Android
   ignoreSilentSwitch?: EnumValues<IgnoreSilentSwitchType>; // iOS
+  /** @deprecated Use source.minLoadRetryCount */
   minLoadRetryCount?: number; // Android
   maxBitRate?: number;
   mixWithOthers?: EnumValues<MixWithOthersType>; // iOS
   muted?: boolean;
   paused?: boolean;
-  pictureInPicture?: boolean; // iOS
+  enterPictureInPictureOnLeave?: boolean;
   playInBackground?: boolean;
   playWhenInactive?: boolean; // iOS
   poster?: string | ReactVideoPoster; // string is deprecated

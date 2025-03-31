@@ -45,30 +45,15 @@ import {
   resolveAssetSourceForVideo,
 } from './utils';
 import NativeVideoManager from './specs/NativeVideoManager';
-import type {VideoSaveData} from './specs/NativeVideoManager';
-import {CmcdMode, ViewType} from './types';
+import {ViewType, CmcdMode, VideoRef} from './types';
 import type {
   OnLoadData,
   OnTextTracksData,
   OnReceiveAdEventData,
   ReactVideoProps,
   CmcdData,
+  ReactVideoSource,
 } from './types';
-
-export interface VideoRef {
-  seek: (time: number, tolerance?: number) => void;
-  resume: () => void;
-  pause: () => void;
-  presentFullscreenPlayer: () => void;
-  dismissFullscreenPlayer: () => void;
-  restoreUserInterfaceForPictureInPictureStopCompleted: (
-    restore: boolean,
-  ) => void;
-  setVolume: (volume: number) => void;
-  setFullScreen: (fullScreen: boolean) => void;
-  save: (options: object) => Promise<VideoSaveData> | void;
-  getCurrentPosition: () => Promise<number>;
-}
 
 const Video = forwardRef<VideoRef, ReactVideoProps>(
   (
@@ -89,6 +74,8 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
       useSecureView,
       viewType,
       shutterColor,
+      adTagUrl,
+      adLanguage,
       onLoadStart,
       onLoad,
       onError,
@@ -120,6 +107,8 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
       onVideoTracks,
       onAspectRatio,
       localSourceEncryptionKeyScheme,
+      minLoadRetryCount,
+      bufferConfig,
       ...rest
     },
     ref,
@@ -152,98 +141,133 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
 
     const [showPoster, setShowPoster] = useState(hasPoster);
 
-    const src = useMemo<VideoSrc | undefined>(() => {
-      if (!source) {
-        return undefined;
-      }
-      const resolvedSource = resolveAssetSourceForVideo(source);
-      let uri = resolvedSource.uri || '';
-      if (uri && uri.match(/^\//)) {
-        uri = `file://${uri}`;
-      }
-      if (!uri) {
-        console.log('Trying to load empty source');
-      }
-      const isNetwork = !!(uri && uri.match(/^(rtp|rtsp|http|https):/));
-      const isAsset = !!(
-        uri &&
-        uri.match(
-          /^(assets-library|ipod-library|file|content|ms-appx|ms-appdata):/,
-        )
-      );
+    const [
+      _restoreUserInterfaceForPIPStopCompletionHandler,
+      setRestoreUserInterfaceForPIPStopCompletionHandler,
+    ] = useState<boolean | undefined>();
 
-      const selectedDrm = source.drm || drm;
-      const _textTracks = source.textTracks || textTracks;
-      const _drm = !selectedDrm
-        ? undefined
-        : {
-            type: selectedDrm.type,
-            licenseServer: selectedDrm.licenseServer,
-            headers: generateHeaderForNative(selectedDrm.headers),
-            contentId: selectedDrm.contentId,
-            certificateUrl: selectedDrm.certificateUrl,
-            base64Certificate: selectedDrm.base64Certificate,
-            useExternalGetLicense: !!selectedDrm.getLicense,
-            multiDrm: selectedDrm.multiDrm,
-            localSourceEncryptionKeyScheme:
-              selectedDrm.localSourceEncryptionKeyScheme ||
-              localSourceEncryptionKeyScheme,
-          };
-
-      let _cmcd: NativeCmcdConfiguration | undefined;
-      if (Platform.OS === 'android' && source?.cmcd) {
-        const cmcd = source.cmcd;
-
-        if (typeof cmcd === 'boolean') {
-          _cmcd = cmcd ? {mode: CmcdMode.MODE_QUERY_PARAMETER} : undefined;
-        } else if (typeof cmcd === 'object' && !Array.isArray(cmcd)) {
-          const createCmcdHeader = (property?: CmcdData) =>
-            property ? generateHeaderForNative(property) : undefined;
-
-          _cmcd = {
-            mode: cmcd.mode ?? CmcdMode.MODE_QUERY_PARAMETER,
-            request: createCmcdHeader(cmcd.request),
-            session: createCmcdHeader(cmcd.session),
-            object: createCmcdHeader(cmcd.object),
-            status: createCmcdHeader(cmcd.status),
-          };
-        } else {
-          throw new Error(
-            'Invalid CMCD configuration: Expected a boolean or an object.',
-          );
+    const sourceToUnternalSource = useCallback(
+      (_source?: ReactVideoSource) => {
+        if (!_source) {
+          return undefined;
         }
-      }
 
-      const selectedContentStartTime =
-        source.contentStartTime || contentStartTime;
+        const isLocalAssetFile =
+          typeof _source === 'number' ||
+          ('uri' in _source && typeof _source.uri === 'number');
 
-      return {
-        uri,
-        isNetwork,
-        isAsset,
-        shouldCache: resolvedSource.shouldCache || false,
-        type: resolvedSource.type || '',
-        mainVer: resolvedSource.mainVer || 0,
-        patchVer: resolvedSource.patchVer || 0,
-        requestHeaders: generateHeaderForNative(resolvedSource.headers),
-        startPosition: resolvedSource.startPosition ?? -1,
-        cropStart: resolvedSource.cropStart || 0,
-        cropEnd: resolvedSource.cropEnd,
-        contentStartTime: selectedContentStartTime,
-        metadata: resolvedSource.metadata,
-        drm: _drm,
-        cmcd: _cmcd,
-        textTracks: _textTracks,
-        textTracksAllowChunklessPreparation:
-          resolvedSource.textTracksAllowChunklessPreparation,
-      };
-    }, [
-      drm,
-      source,
-      textTracks,
-      contentStartTime,
-      localSourceEncryptionKeyScheme,
-    ]);
+        const resolvedSource = resolveAssetSourceForVideo(_source);
+        let uri = resolvedSource.uri || '';
+        if (uri && uri.match(/^\//)) {
+          uri = `file://${uri}`;
+        }
+        if (!uri) {
+          console.log('Trying to load empty source');
+        }
+        const isNetwork = !!(uri && uri.match(/^(rtp|rtsp|http|https):/));
+        const isAsset = !!(
+          uri &&
+          uri.match(
+            /^(assets-library|ipod-library|file|content|ms-appx|ms-appdata):/,
+          )
+        );
+
+        const selectedDrm = _source.drm || drm;
+        const _textTracks = _source.textTracks || textTracks;
+        const _drm = !selectedDrm
+          ? undefined
+          : {
+              type: selectedDrm.type,
+              licenseServer: selectedDrm.licenseServer,
+              headers: generateHeaderForNative(selectedDrm.headers),
+              contentId: selectedDrm.contentId,
+              certificateUrl: selectedDrm.certificateUrl,
+              base64Certificate: selectedDrm.base64Certificate,
+              useExternalGetLicense: !!selectedDrm.getLicense,
+              multiDrm: selectedDrm.multiDrm,
+              localSourceEncryptionKeyScheme:
+                selectedDrm.localSourceEncryptionKeyScheme ||
+                localSourceEncryptionKeyScheme,
+            };
+
+        let _cmcd: NativeCmcdConfiguration | undefined;
+        if (Platform.OS === 'android' && source?.cmcd) {
+          const cmcd = source.cmcd;
+
+          if (typeof cmcd === 'boolean') {
+            _cmcd = cmcd ? {mode: CmcdMode.MODE_QUERY_PARAMETER} : undefined;
+          } else if (typeof cmcd === 'object' && !Array.isArray(cmcd)) {
+            const createCmcdHeader = (property?: CmcdData) =>
+              property ? generateHeaderForNative(property) : undefined;
+
+            _cmcd = {
+              mode: cmcd.mode ?? CmcdMode.MODE_QUERY_PARAMETER,
+              request: createCmcdHeader(cmcd.request),
+              session: createCmcdHeader(cmcd.session),
+              object: createCmcdHeader(cmcd.object),
+              status: createCmcdHeader(cmcd.status),
+            };
+          } else {
+            throw new Error(
+              'Invalid CMCD configuration: Expected a boolean or an object.',
+            );
+          }
+        }
+
+        const selectedContentStartTime =
+          _source.contentStartTime || contentStartTime;
+
+        const _ad =
+          _source.ad ||
+          (adTagUrl || adLanguage
+            ? {adTagUrl: adTagUrl, adLanguage: adLanguage}
+            : undefined);
+
+        const _minLoadRetryCount =
+          _source.minLoadRetryCount || minLoadRetryCount;
+
+        const _bufferConfig = _source.bufferConfig || bufferConfig;
+        return {
+          uri,
+          isNetwork,
+          isAsset,
+          isLocalAssetFile,
+          shouldCache: resolvedSource.shouldCache || false,
+          type: resolvedSource.type || '',
+          mainVer: resolvedSource.mainVer || 0,
+          patchVer: resolvedSource.patchVer || 0,
+          requestHeaders: generateHeaderForNative(resolvedSource.headers),
+          startPosition: resolvedSource.startPosition ?? -1,
+          cropStart: resolvedSource.cropStart || 0,
+          cropEnd: resolvedSource.cropEnd,
+          contentStartTime: selectedContentStartTime,
+          metadata: resolvedSource.metadata,
+          drm: _drm,
+          ad: _ad,
+          cmcd: _cmcd,
+          textTracks: _textTracks,
+          textTracksAllowChunklessPreparation:
+            resolvedSource.textTracksAllowChunklessPreparation,
+          minLoadRetryCount: _minLoadRetryCount,
+          bufferConfig: _bufferConfig,
+        };
+      },
+      [
+        adLanguage,
+        adTagUrl,
+        contentStartTime,
+        drm,
+        localSourceEncryptionKeyScheme,
+        minLoadRetryCount,
+        source?.cmcd,
+        textTracks,
+        bufferConfig,
+      ],
+    );
+
+    const src = useMemo<VideoSrc | undefined>(() => {
+      return sourceToUnternalSource(source);
+    }, [sourceToUnternalSource, source]);
 
     const _selectedTextTrack = useMemo(() => {
       if (!selectedTextTrack) {
@@ -365,6 +389,16 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
       );
     }, []);
 
+    const setSource = useCallback(
+      (_source?: ReactVideoSource) => {
+        return NativeVideoManager.setSourceCmd(
+          getReactTag(nativeRef),
+          sourceToUnternalSource(_source),
+        );
+      },
+      [sourceToUnternalSource],
+    );
+
     const presentFullscreenPlayer = useCallback(
       () => setFullScreen(true),
       [setFullScreen],
@@ -374,6 +408,40 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
       () => setFullScreen(false),
       [setFullScreen],
     );
+
+    const enterPictureInPicture = useCallback(async () => {
+      if (!nativeRef.current) {
+        console.warn('Video Component is not mounted');
+        return;
+      }
+
+      const _enterPictureInPicture = () => {
+        NativeVideoManager.enterPictureInPictureCmd(getReactTag(nativeRef));
+      };
+
+      Platform.select({
+        ios: _enterPictureInPicture,
+        android: _enterPictureInPicture,
+        default: () => {},
+      })();
+    }, []);
+
+    const exitPictureInPicture = useCallback(async () => {
+      if (!nativeRef.current) {
+        console.warn('Video Component is not mounted');
+        return;
+      }
+
+      const _exitPictureInPicture = () => {
+        NativeVideoManager.exitPictureInPictureCmd(getReactTag(nativeRef));
+      };
+
+      Platform.select({
+        ios: _exitPictureInPicture,
+        android: _exitPictureInPicture,
+        default: () => {},
+      })();
+    }, []);
 
     const save = useCallback((options: object) => {
       // VideoManager.save can be null on android & windows
@@ -389,9 +457,12 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
       return NativeVideoManager.getCurrentPosition(getReactTag(nativeRef));
     }, []);
 
-    const restoreUserInterfaceForPictureInPictureStopCompleted = (restored: boolean) => {
-      nativeRef.current?.setNativeProps({ restoreUserInterfaceForPIPStopCompletionHandler: restored })
-    };
+    const restoreUserInterfaceForPictureInPictureStopCompleted = useCallback(
+      (restored: boolean) => {
+        setRestoreUserInterfaceForPIPStopCompletionHandler(restored);
+      },
+      [setRestoreUserInterfaceForPIPStopCompletionHandler],
+    );
 
     const onVideoLoadStart = useCallback(
       (e: NativeSyntheticEvent<OnLoadStartData>) => {
@@ -620,6 +691,9 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
         setVolume,
         getCurrentPosition,
         setFullScreen,
+        enterPictureInPicture,
+        exitPictureInPicture,
+        setSource,
       }),
       [
         seek,
@@ -632,6 +706,9 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
         setVolume,
         getCurrentPosition,
         setFullScreen,
+        enterPictureInPicture,
+        exitPictureInPicture,
+        setSource,
       ],
     );
 
@@ -740,9 +817,8 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
     const _style: StyleProp<ViewStyle> = useMemo(
       () => ({
         ...StyleSheet.absoluteFillObject,
-        ...(showPoster ? {display: 'none'} : {}),
       }),
-      [showPoster],
+      [],
     );
 
     return (
@@ -753,6 +829,9 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
           src={src}
           style={_style}
           resizeMode={resizeMode}
+          restoreUserInterfaceForPIPStopCompletionHandler={
+            _restoreUserInterfaceForPIPStopCompletionHandler
+          }
           selectedTextTrack={_selectedTextTrack}
           selectedAudioTrack={_selectedAudioTrack}
           selectedVideoTrack={_selectedVideoTrack}

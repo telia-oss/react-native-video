@@ -26,10 +26,16 @@ type VideoMetadata = Readonly<{
   imageUri?: string;
 }>;
 
+export type AdsConfig = Readonly<{
+  adTagUrl?: string;
+  adLanguage?: string;
+}>;
+
 export type VideoSrc = Readonly<{
   uri?: string;
   isNetwork?: boolean;
   isAsset?: boolean;
+  isLocalAssetFile?: boolean;
   shouldCache?: boolean;
   type?: string;
   mainVer?: Int32;
@@ -44,6 +50,9 @@ export type VideoSrc = Readonly<{
   cmcd?: NativeCmcdConfiguration; // android
   textTracksAllowChunklessPreparation?: boolean; // android
   textTracks?: TextTracks;
+  ad?: AdsConfig;
+  minLoadRetryCount?: Int32; // Android
+  bufferConfig?: BufferConfig; // Android
 }>;
 
 type DRMType = WithDefault<string, 'widevine'>;
@@ -283,12 +292,12 @@ type OnReceiveAdEventData = Readonly<{
 
 export type OnVideoErrorData = Readonly<{
   error: Readonly<{
-    errorString?: string; // android
+    errorString?: string; // android | web
     errorException?: string; // android
     errorStackTrace?: string; // android
     errorCode?: string; // android
     error?: string; // ios
-    code?: Int32; // ios
+    code?: Int32; // ios | web
     localizedDescription?: string; // ios
     localizedFailureReason?: string; // ios
     localizedRecoverySuggestion?: string; // ios
@@ -313,6 +322,7 @@ type ControlsStyles = Readonly<{
   hideDuration?: WithDefault<boolean, false>;
   hideNavigationBarOnFullScreenMode?: WithDefault<boolean, true>;
   hideNotificationBarOnFullScreenMode?: WithDefault<boolean, true>;
+  hideSettingButton?: WithDefault<boolean, true>;
   seekIncrementMS?: Int32;
   liveLabel?: string;
 }>;
@@ -323,8 +333,6 @@ export type OnControlsVisibilityChange = Readonly<{
 
 export interface VideoNativeProps extends ViewProps {
   src?: VideoSrc;
-  adTagUrl?: string;
-  adLanguage?: string;
   allowsExternalPlayback?: boolean; // ios, true
   disableFocus?: boolean; // android
   maxBitRate?: Float;
@@ -346,7 +354,7 @@ export interface VideoNativeProps extends ViewProps {
   preventsDisplaySleepDuringVideoPlayback?: boolean;
   preferredForwardBufferDuration?: Float; //ios, 0
   playWhenInactive?: boolean; // ios, false
-  pictureInPicture?: boolean; // ios, false
+  enterPictureInPictureOnLeave?: boolean; // default false
   ignoreSilentSwitch?: WithDefault<string, 'inherit'>; // ios, 'inherit'
   mixWithOthers?: WithDefault<string, 'inherit'>; // ios, 'inherit'
   rate?: Float;
@@ -357,12 +365,10 @@ export interface VideoNativeProps extends ViewProps {
   restoreUserInterfaceForPIPStopCompletionHandler?: boolean;
   debug?: DebugConfig;
   showNotificationControls?: WithDefault<boolean, false>; // Android, iOS
-  bufferConfig?: BufferConfig; // Android
   currentPlaybackTime?: Double; // Android
   disableDisconnectError?: boolean; // Android
   focusable?: boolean; // Android
   hideShutterView?: boolean; //	Android
-  minLoadRetryCount?: Int32; // Android
   reportBandwidth?: boolean; //Android
   subtitleStyle?: SubtitleStyle; // android
   viewType?: Int32; // Android
