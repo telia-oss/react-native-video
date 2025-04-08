@@ -72,7 +72,9 @@ import React
         func enterPictureInPicture() {
             guard let _pipController else { return }
             if !_isPictureInPictureActive {
-                _pipController.startPictureInPicture()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    _pipController.startPictureInPicture()
+                }
             }
         }
 
