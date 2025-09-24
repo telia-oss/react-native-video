@@ -9,6 +9,11 @@ class AudioSessionManager {
     private var remoteControlEventsActive = false
 
     private var isAudioSessionManagementDisabled: Bool {
+        // If no views are registered, disable audio session management
+        if videoViews.allObjects.isEmpty {
+            return true
+        }
+
         return videoViews.allObjects.contains { view in
             return view._disableAudioSessionManagement == true
         }
@@ -139,14 +144,24 @@ class AudioSessionManager {
             return view._playInBackground
         }
 
-        let canAllowMixing = !anyPlayerShowNotificationControls && !anyPlayerNeedsBackgroundPlayback
+        let anyPlayerPlaying = videoViews.allObjects.contains { view in
+            return !view.isMuted() && view._player != nil && view._player?.rate != 0
+        }
+
+        let anyPlayerWantsMixing = videoViews.allObjects.contains { view in
+            return view._mixWithOthers == "mix" || view._mixWithOthers == "duck"
+        }
+
+        let canAllowMixing = anyPlayerWantsMixing || (!anyPlayerShowNotificationControls && !anyPlayerNeedsBackgroundPlayback)
 
         if isAudioSessionManagementDisabled {
             // AUDIO SESSION MANAGEMENT DISABLED BY USER
             return
         }
 
-        if canAllowMixing {
+        if !anyPlayerPlaying {
+            options.insert(.mixWithOthers)
+        } else if canAllowMixing {
             let shouldEnableMixing = videoViews.allObjects.contains { view in
                 return view._mixWithOthers == "mix"
             }
@@ -195,7 +210,7 @@ class AudioSessionManager {
 
         do {
             try audioSession.setCategory(
-                category, mode: .moviePlayback, options: canAllowMixing ? options : []
+                category, mode: .moviePlayback, options: options
             )
 
             // Configure audio port
