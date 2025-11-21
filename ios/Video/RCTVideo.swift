@@ -55,7 +55,6 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     private var _fullscreenAutorotate = true
     private var _fullscreenOrientation: String = "all"
     private var _fullscreenPlayerPresented = false
-    private var _fullscreenUncontrolPlayerPresented = false // to call events switching full screen mode from player controls
     private var _filterName: String!
     private var _filterEnabled = false
     private var _presentingViewController: UIViewController?
@@ -493,7 +492,19 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         ])
 
         if let uri = source.uri, uri.starts(with: "ph://") {
-            let photoAsset = await RCTVideoUtils.preparePHAsset(uri: uri)
+            guard let photoAsset = await RCTVideoUtils.preparePHAsset(uri: uri) else {
+                DebugLog("Could not load asset '\(String(describing: _source))'")
+                throw NSError(domain: "", code: 0, userInfo: nil)
+            }
+
+            if let overridePlayerAsset = await ReactNativeVideoManager.shared.overridePlayerAsset(source: source, asset: photoAsset) {
+                if overridePlayerAsset.type == .full {
+                    return AVPlayerItem(asset: overridePlayerAsset.asset)
+                }
+
+                return await playerItemPrepareText(source: source, asset: overridePlayerAsset.asset, assetOptions: nil, uri: source.uri ?? "")
+            }
+
             return await playerItemPrepareText(source: source, asset: photoAsset, assetOptions: nil, uri: source.uri ?? "")
         }
 
@@ -530,6 +541,14 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             )
         }
 
+        if let overridePlayerAsset = await ReactNativeVideoManager.shared.overridePlayerAsset(source: source, asset: asset) {
+            if overridePlayerAsset.type == .full {
+                return AVPlayerItem(asset: overridePlayerAsset.asset)
+            }
+
+            return await playerItemPrepareText(source: source, asset: overridePlayerAsset.asset, assetOptions: assetOptions, uri: source.uri ?? "")
+        }
+
         return await playerItemPrepareText(source: source, asset: asset, assetOptions: assetOptions, uri: source.uri ?? "")
     }
 
@@ -555,13 +574,21 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
             _player!.replaceCurrentItem(with: playerItem)
 
+            if #available(iOS 15.0, *) {
+                if _playInBackground {
+                    _player!.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+                } else {
+                    _player!.audiovisualBackgroundPlaybackPolicy = .automatic
+                }
+            }
+
             if _showNotificationControls {
                 // We need to register player after we set current item and only for init
                 NowPlayingInfoCenterManager.shared.registerPlayer(player: _player!)
             }
         } else {
             #if !os(tvOS) && !os(visionOS)
-                if #available(iOS 16.0, *) {
+                if #available(iOS 16.0, macCatalyst 18.0, *) {
                     // This feature caused crashes, if the app was put in bg, before the source change
                     // https://github.com/TheWidlarzGroup/react-native-video/issues/3900
                     self._playerViewController?.allowsVideoFrameAnalysis = false
@@ -569,10 +596,18 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             #endif
             _player?.replaceCurrentItem(with: playerItem)
             #if !os(tvOS) && !os(visionOS)
-                if #available(iOS 16.0, *) {
+                if #available(iOS 16.0, macCatalyst 18.0, *) {
                     self._playerViewController?.allowsVideoFrameAnalysis = true
                 }
             #endif
+
+            if #available(iOS 15.0, *) {
+                if _playInBackground {
+                    _player!.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+                } else {
+                    _player!.audiovisualBackgroundPlaybackPolicy = .automatic
+                }
+            }
             // later we can just call "updateNowPlayingInfo:
             NowPlayingInfoCenterManager.shared.updateNowPlayingInfo()
         }
@@ -621,7 +656,11 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                 DebugLog("setSrc Stopping playback")
                 return
             }
-            self.removePlayerLayer()
+
+            // Ensure UI operations are performed on main thread
+            DispatchQueue.main.sync {
+                self.removePlayerLayer()
+            }
             self._playerObserver.player = nil
             self._drmManager = nil
             self._playerObserver.playerItem = nil
@@ -1167,7 +1206,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         viewController.player = player
 
         // Set the initial playback speed in controls to match playback rate
-        if #available(iOS 16.0, *) {
+        if #available(iOS 16.0, tvOS 16.0, *) {
             if let initialSpeed = viewController.speeds.first(where: { $0.rate == _rate }) {
                 viewController.selectSpeed(initialSpeed)
             }
@@ -1207,14 +1246,18 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         if _controls != controls || ((_playerLayer == nil) && (_playerViewController == nil)) {
             _controls = controls
             if _controls {
-                self.removePlayerLayer()
-                self.usePlayerViewController()
+                DispatchQueue.main.async {
+                    self.removePlayerLayer()
+                    self.usePlayerViewController()
+                }
             } else {
-                _playerViewController?.view.removeFromSuperview()
-                _playerViewController?.removeFromParent()
-                _playerViewController = nil
-                _playerObserver.playerViewController = nil
-                self.usePlayerLayer()
+                DispatchQueue.main.async {
+                    self._playerViewController?.view.removeFromSuperview()
+                    self._playerViewController?.removeFromParent()
+                    self._playerViewController = nil
+                    self._playerObserver.playerViewController = nil
+                    self.usePlayerLayer()
+                }
             }
         }
     }
@@ -1585,8 +1628,8 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         )
     }
 
-    func handlePlaybackBufferKeyEmpty(playerItem _: AVPlayerItem, change _: NSKeyValueObservedChange<Bool>) {
-        if !_isBuffering {
+    func handlePlaybackBufferKeyEmpty(playerItem _: AVPlayerItem, change: NSKeyValueObservedChange<Bool>) {
+        if !_isBuffering && change.newValue == true {
             _isBuffering = true
         }
     }
@@ -1663,30 +1706,27 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         guard let bounds = RCTVideoUtils.getCurrentWindow()?.bounds else { return }
 
         if !oldRect!.equalTo(newRect!) {
-            // https://github.com/TheWidlarzGroup/react-native-video/issues/3085#issuecomment-1557293391
-            if newRect!.equalTo(bounds) {
-                RCTLog("in fullscreen")
-                if !_fullscreenUncontrolPlayerPresented {
-                    _fullscreenUncontrolPlayerPresented = true
-
-                    self.onVideoFullscreenPlayerWillPresent?(["target": self.reactTag as Any])
-                    self.onVideoFullscreenPlayerDidPresent?(["target": self.reactTag as Any])
-                }
-            } else {
-                NSLog("not fullscreen")
-                if _fullscreenUncontrolPlayerPresented {
-                    _fullscreenUncontrolPlayerPresented = false
-
-                    self.onVideoFullscreenPlayerWillDismiss?(["target": self.reactTag as Any])
-                    self.onVideoFullscreenPlayerDidDismiss?(["target": self.reactTag as Any])
-                }
-            }
-
             if let reactVC = self.reactViewController() {
                 reactVC.view.frame = bounds
                 reactVC.view.setNeedsLayout()
             }
         }
+    }
+
+    func handleWillEnterFullScreen() {
+        self.onVideoFullscreenPlayerWillPresent?(["target": self.reactTag as Any])
+    }
+
+    func handleDidEnterFullScreen() {
+        self.onVideoFullscreenPlayerDidPresent?(["target": self.reactTag as Any])
+    }
+
+    func handleWillExitFullScreen() {
+        self.onVideoFullscreenPlayerWillDismiss?(["target": self.reactTag as Any])
+    }
+
+    func handleDidExitFullScreen() {
+        self.onVideoFullscreenPlayerDidDismiss?(["target": self.reactTag as Any])
     }
 
     @objc

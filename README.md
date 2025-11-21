@@ -1,69 +1,139 @@
-# react-native-video
-🎬 `<Video>` component for React Native
+[![React Native Video Component](./docs/assets/baners/rnv-banner.png)](https://thewidlarzgroup.com/?utm_source=rnv&utm_medium=readme&utm_id=banner)
 
-## Documentation
-documentation is available at [docs.thewidlarzgroup.com/react-native-video/](https://docs.thewidlarzgroup.com/react-native-video/?utm_source=rnv&utm_medium=readme&utm_campaign=docs&utm_id=text)
+The most battle-tested open-source video player component for React Native with support for DRM, offline playback, HLS/DASH streaming, and more.
 
-## Examples
-You can find several examples demonstrating the usage of react-native-video [here](https://github.com/TheWidlarzGroup/react-native-video/tree/master/examples). <br />
-These include a [basic](https://github.com/TheWidlarzGroup/react-native-video/blob/master/examples/common/BasicExample.tsx) usage and [DRM example](https://github.com/TheWidlarzGroup/react-native-video/blob/master/examples/common/DRMExample.tsx) (with a [free DRM stream](https://www.thewidlarzgroup.com/services/free-drm-token-generator-for-video?utm_source=rnv&utm_medium=readme&utm_campaign=drm&utm_id=free-drm)).
 
-## Usage
+## 🔍 Features
 
-```javascript
-// Load the module
+- 📱 Plays all video formats natively supported by iOS/Android 
+- ▶️ Local and remote playback  
+- 🔁 Streaming: HLS • DASH • SmoothStreaming  
+- 🔐 DRM: Widevine & FairPlay ([See free DRM stream example](https://www.thewidlarzgroup.com/services/free-drm-token-generator-for-video?utm_source=rnv&utm_medium=readme&utm_id=free-drm))
+- 📴 Offline playback, video download, support for side-tracks and side-captions (via [optional SDK](https://docs.thewidlarzgroup.com/offline-video-sdk?utm_source=rnv&utm_medium=readme&utm_id=features-text))  
+- 🎚️ Fine-grained control over tracks, buffering & events
+- 🧩 Expo plugin support
+- 🌐 Basic Web Support 
+- 📱 Picture in Picture
+- 📺 TV Support
 
-import Video, {VideoRef} from 'react-native-video';
 
-// Within your render function, assuming you have a file called
-// "background.mp4" in your project. You can include multiple videos
-// on a single screen if you like.
 
-const VideoPlayer = () => {
- const videoRef = useRef<VideoRef>(null);
- const background = require('./background.mp4');
+## ✨ Project Status
 
- return (
-   <Video 
-    // Can be a URL or a local file.
-    source={background}
-    // Store reference  
-    ref={videoRef}
-    // Callback when remote video is buffering                                      
-    onBuffer={onBuffer}
-    // Callback when video cannot be loaded              
-    onError={onError}               
-    style={styles.backgroundVideo}
-   />
- )
-}
+| Version | State | Architecture |
+|---------|-------|--------------|
+| **v5 and lower** | ❌ End-of-life [Commercial Support Available](https://www.thewidlarzgroup.com/blog/react-native-video-upgrade-challenges-custom-maintenance-support#how-we-can-help?utm_source=rnv&utm_medium=readme&utm_id=upgradev5) | Old Architecture |
+| **v6** | 🛠 Maintained (community + TWG) | Old + New (Interop Layer) |
+| [**v7**](https://github.com/TheWidlarzGroup/react-native-video/tree/v7) | [🚀 Active Development](https://github.com/TheWidlarzGroup/react-native-video/tree/v7) | Old + New (Full Support) |
 
-// Later on in your styles..
-var styles = StyleSheet.create({
-  backgroundVideo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
-  },
-});
+[`react-native-video` v7](https://github.com/TheWidlarzGroup/react-native-video/tree/v7) introduces full support for the new React Native architecture, unlocking better performance, improved consistency, and modern native modules.
+
+---
+
+## 📚 Documentation & Examples
+
+- 📖 [Documentation](https://docs.thewidlarzgroup.com/react-native-video/)
+- 📦 [Example: Free DRM Stream](https://www.thewidlarzgroup.com/services/free-drm-token-generator-for-video?utm_source=rnv&utm_medium=readme&utm_id=free-drm)
+- 📦 [Example: Offline SDK integration](https://docs.thewidlarzgroup.com/offline-video-sdk)
+
+## 🚀 Quick Start
+
+### Install
+```bash
+# Install dependencies
+yarn add react-native-video
+
+# Install pods
+cd ios && pod install
 ```
 
-## Roadmap
-You can follow our work on the library at [Roadmap](https://github.com/orgs/TheWidlarzGroup/projects/6).
+### Usage
+```tsx
+import Video from 'react-native-video';
 
-## Community support
-We have an discord server where you can ask questions and get help. [Join the discord server](https://discord.gg/WXuM4Tgb9X)
+export default () => (
+  <Video
+    source={{ uri: 'https://www.w3schools.com/html/mov_bbb.mp4' }}
+    style={{ width: '100%', aspectRatio: 16 / 9 }}
+    controls
+  />
+);
+```
 
-## Enterprise Support
-<p>
-  📱 <i>react-native-video</i> is provided <i>as it is</i>. For enterprise support or other business inquiries, <a href="https://www.thewidlarzgroup.com/?utm_source=rnv&utm_medium=readme&utm_campaign=enterprise&utm_id=text#Contact">please contact us 🤝</a>. We can help you with the integration, customization and maintenance. We are providing both free and commercial support for this project. let's build something awesome together! 🚀
-</p>
-<a href="https://www.thewidlarzgroup.com/?utm_source=rnv&utm_medium=readme&utm_campaign=enterprise&utm_id=banner">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/baners/twg-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./docs/assets/baners/twg-light.png" />
-    <img alt="TheWidlarzGroup" src="./docs/assets/baners/twg-light.png" />
-  </picture>
+---
+
+## 🧩 Plugins
+
+<a href="https://www.thewidlarzgroup.com/offline-video-sdk?utm_source=rnv&utm_medium=readme&utm_id=banner">
+  <img src="./docs/assets/baners/sdk-banner.png" alt="Offline SDK Preview" width="40%" align="right" />
 </a>
+
+### 1 · 📥 Offline SDK
+
+#### Need Offline Video Playback in React Native?
+
+If you're building a video-first app and need to **download HLS streams for offline playback**, you're in the right place.
+
+#### 👉 [Check Offline Video SDK for React Native](https://www.thewidlarzgroup.com/offline-video-sdk?utm_source=rnv&utm_medium=readme&utm_id=check-offline-video-sdk)
+
+This SDK supports:
+- 🎞 Offline HLS playback
+- 🎧 Multi-language audio track downloads
+- 💬 Subtitles support
+- 🔐 DRM license handling
+- 📊 Analytics & state tracking
+
+---
+
+#### 🔑 How to get access?
+
+- Get a **free trial** (no credit card required)
+- Use our [starter project](https://github.com/TheWidlarzGroup/react-native-offline-video-starter) to see it in action
+- Integrates with both `v6` and `v7` versions
+
+👉 **[Start Free Trial on the SDK Platform →](https://sdk.thewidlarzgroup.com/signup?utm_source=rnv&utm_medium=readme&utm_id=start-trial-offline-video-sdk)**
+
+---
+
+### 2 · 🧪 Architecture
+
+Write your own plugins to extend library logic, attach analytics or add custom workflows - **without forking** the core SDK.  
+→ [Plugin documentation](https://docs.thewidlarzgroup.com/react-native-video/other/plugin?utm_source=rnv&utm_medium=readme&utm_id=plugin-text)
+
+---
+
+## 💼 TWG Services & Products
+
+| Offering | Description |
+|----------|-------------|
+| [**Professional Support Packages**](https://www.thewidlarzgroup.com/issue-boost?utm_source=rnv&utm_medium=readme&utm_campaign=professional-support-packages#Contact) | Priority bug-fixes, guaranteed SLAs, [roadmap influence](https://github.com/orgs/TheWidlarzGroup/projects/6) |
+| [**Issue Booster**](https://www.thewidlarzgroup.com/issue-boost?utm_source=rnv&utm_medium=readme) | Fast-track urgent fixes with a pay‑per‑issue model |
+| [**Offline Video SDK**](https://www.thewidlarzgroup.com/offline-video-sdk/?utm_source=rnv&utm_medium=readme&utm_campaign=downloading&utm_id=offline-video-sdk-link) | Plug‑and‑play secure download solution for iOS & Android |
+| [**Integration Support**](https://www.thewidlarzgroup.com/?utm_source=rnv&utm_medium=readme&utm_campaign=integration-support#Contact) | Hands‑on help integrating video, DRM & offline into your app |
+| [**Free DRM Token Generator**](https://www.thewidlarzgroup.com/services/free-drm-token-generator-for-video?utm_source=rnv&utm_medium=readme&utm_id=free-drm) | Generate Widevine / FairPlay tokens for testing |
+| [**Ready Boilerplates**](https://www.thewidlarzgroup.com/showcases?utm_source=rnv&utm_medium=readme) | Ready-to-use apps with offline HLS/DASH DRM, video frame scrubbing, TikTok-style video feed, background uploads, Skia-based frame processor (R&D phase), and more |
+| [**React Native Video Upgrade Guide**](https://www.thewidlarzgroup.com/blog/react-native-video-upgrade-challenges-custom-maintenance-support?utm_source=rnv&utm_medium=readme&utm_id=upgrade-blog&utm_campaign=v7) | Common upgrade pitfalls & how to solve them |
+
+*See how [TWG](https://www.thewidlarzgroup.com/?utm_source=rnv&utm_medium=readme&utm_id=services-text) helped **Learnn** ship a world‑class player in record time -  [case study](https://gitnation.com/contents/a-4-year-retrospective-lessons-learned-from-building-a-video-player-from-scratch-with-react-native).*
+
+Contact us at [hi@thewidlarzgroup.com](mailto:hi@thewidlarzgroup.com)
+
+## 🌍 Social
+
+- 🐦 **X / Twitter** - [follow product & release updates](https://x.com/TheWidlarzGroup)
+- 💬 **Discord** - [talk to the community and us](https://discord.gg/9WPq6Yx)
+- 💼 **LinkedIn** - [see TWG flexing](https://linkedin.com/company/the-widlarz-group)
+
+## 📰 Community & Media
+
+- 🗽 **React Summit US** – How TWG helped Learnn boost video performance on React Native.  
+[Watch the talk »](https://gitnation.com/contents/a-4-year-retrospective-lessons-learned-from-building-a-video-player-from-scratch-with-react-native)
+
+- 🧨 **v7 deep dive** – Why we’re building v7 with Nitro Modules
+[Watch on X »](https://x.com/krzysztof_moch/status/1854162551946478051)
+
+- 🛠️ **Well-maintained open-source library** - What does it truly mean? - Bart's talk for React Native Warsaw
+[Watch here »](https://www.youtube.com/watch?v=RAQQwGCQNqY)
+
+- 📺 **“Over the Top” Panel** - Building Streaming Apps for Mobile, Web, and Smart TVs - Bart giving his insights on the industry
+[Watch here »](https://youtu.be/j2b_bG-32JI)
