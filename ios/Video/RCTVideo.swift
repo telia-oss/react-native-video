@@ -55,7 +55,6 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     private var _fullscreenAutorotate = true
     private var _fullscreenOrientation: String = "all"
     private var _fullscreenPlayerPresented = false
-    private var _fullscreenUncontrolPlayerPresented = false // to call events switching full screen mode from player controls
     private var _filterName: String!
     private var _filterEnabled = false
     private var _presentingViewController: UIViewController?
@@ -69,14 +68,8 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             if isPictureInPictureActive() { return }
             if _enterPictureInPictureOnLeave {
                 initPictureinPicture()
-                if #available(iOS 9.0, tvOS 14.0, *) {
-                    _playerViewController?.allowsPictureInPicturePlayback = true
-                }
             } else {
                 _pip?.deinitPipController()
-                if #available(iOS 9.0, tvOS 14.0, *) {
-                    _playerViewController?.allowsPictureInPicturePlayback = false
-                }
             }
         }
     }
@@ -94,6 +87,8 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         private var _imaAdsManager: RCTIMAAdsManager!
         /* Playhead used by the SDK to track content video progress and insert mid-rolls. */
         private var _contentPlayhead: IMAAVPlayerContentPlayhead?
+        /* The reference of your video player for the IMA DAI SDK to monitor playback and handle timed metadata */
+        private var _imaVideoDisplay: IMAAVPlayerVideoDisplay?
     #endif
     private var _didRequestAds = false
     private var _adPlaying = false
@@ -106,6 +101,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     #endif
 
     private var _pip: RCTPictureInPicture?
+    private var _isPictureInPictureActive = false
 
     // Events
     @objc var onVideoLoadStart: RCTDirectEventBlock?
@@ -139,19 +135,21 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     @objc
     func _onPictureInPictureEnter() {
-        onPictureInPictureStatusChanged?(["isActive": NSNumber(value: true)])
+        handlePictureInPictureEnter()
     }
 
     @objc
     func _onPictureInPictureExit() {
-        onPictureInPictureStatusChanged?(["isActive": NSNumber(value: false)])
+        handlePictureInPictureExit()
     }
 
     func handlePictureInPictureEnter() {
+        _isPictureInPictureActive = true
         onPictureInPictureStatusChanged?(["isActive": NSNumber(value: true)])
     }
 
     func handlePictureInPictureExit() {
+        _isPictureInPictureActive = false
         onPictureInPictureStatusChanged?(["isActive": NSNumber(value: false)])
 
         // To continue audio playback in backgroud we need to set
@@ -170,7 +168,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     func isPictureInPictureActive() -> Bool {
         #if os(iOS)
-            return _pip?._pipController?.isPictureInPictureActive == true
+            return _isPictureInPictureActive
         #else
             return false
         #endif
@@ -442,7 +440,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
         if currentTimeSecs >= 0 {
             #if USE_GOOGLE_IMA
-                if !_didRequestAds && currentTimeSecs >= 0.0001 && _source?.adParams.adTagUrl != nil {
+                if !_didRequestAds && currentTimeSecs >= 0.0001 && _source?.adParams.isCSAI == true {
                     _imaAdsManager.requestAds()
                     _didRequestAds = true
                 }
@@ -493,7 +491,19 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         ])
 
         if let uri = source.uri, uri.starts(with: "ph://") {
-            let photoAsset = await RCTVideoUtils.preparePHAsset(uri: uri)
+            guard let photoAsset = await RCTVideoUtils.preparePHAsset(uri: uri) else {
+                DebugLog("Could not load asset '\(String(describing: _source))'")
+                throw NSError(domain: "", code: 0, userInfo: nil)
+            }
+
+            if let overridePlayerAsset = await ReactNativeVideoManager.shared.overridePlayerAsset(source: source, asset: photoAsset) {
+                if overridePlayerAsset.type == .full {
+                    return AVPlayerItem(asset: overridePlayerAsset.asset)
+                }
+
+                return await playerItemPrepareText(source: source, asset: overridePlayerAsset.asset, assetOptions: nil, uri: source.uri ?? "")
+            }
+
             return await playerItemPrepareText(source: source, asset: photoAsset, assetOptions: nil, uri: source.uri ?? "")
         }
 
@@ -505,7 +515,6 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             applyNextSource()
             throw NSError(domain: "", code: 0, userInfo: nil)
         }
-
         if let startPosition = _source?.startPosition {
             _startPosition = startPosition / 1000
         }
@@ -528,6 +537,14 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                 onVideoError: onVideoError,
                 onGetLicense: onGetLicense
             )
+        }
+
+        if let overridePlayerAsset = await ReactNativeVideoManager.shared.overridePlayerAsset(source: source, asset: asset) {
+            if overridePlayerAsset.type == .full {
+                return AVPlayerItem(asset: overridePlayerAsset.asset)
+            }
+
+            return await playerItemPrepareText(source: source, asset: overridePlayerAsset.asset, assetOptions: assetOptions, uri: source.uri ?? "")
         }
 
         return await playerItemPrepareText(source: source, asset: asset, assetOptions: assetOptions, uri: source.uri ?? "")
@@ -554,6 +571,15 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             ReactNativeVideoManager.shared.onInstanceCreated(id: instanceId, player: _player as Any)
 
             _player!.replaceCurrentItem(with: playerItem)
+            #if !os(tvOS) && !os(visionOS)
+                if #available(iOS 15.0, *) {
+                    if _playInBackground {
+                        _player!.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+                    } else {
+                        _player!.audiovisualBackgroundPlaybackPolicy = .automatic
+                    }
+                }
+            #endif
 
             if _showNotificationControls {
                 // We need to register player after we set current item and only for init
@@ -561,7 +587,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             }
         } else {
             #if !os(tvOS) && !os(visionOS)
-                if #available(iOS 16.0, *) {
+                if #available(iOS 16.0, macCatalyst 18.0, *) {
                     // This feature caused crashes, if the app was put in bg, before the source change
                     // https://github.com/TheWidlarzGroup/react-native-video/issues/3900
                     self._playerViewController?.allowsVideoFrameAnalysis = false
@@ -569,8 +595,18 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             #endif
             _player?.replaceCurrentItem(with: playerItem)
             #if !os(tvOS) && !os(visionOS)
-                if #available(iOS 16.0, *) {
+                if #available(iOS 16.0, macCatalyst 18.0, *) {
                     self._playerViewController?.allowsVideoFrameAnalysis = true
+                }
+            #endif
+
+            #if !os(tvOS) && !os(visionOS)
+                if #available(iOS 15.0, *) {
+                    if _playInBackground {
+                        _player!.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+                    } else {
+                        _player!.audiovisualBackgroundPlaybackPolicy = .automatic
+                    }
                 }
             #endif
             // later we can just call "updateNowPlayingInfo:
@@ -586,10 +622,8 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         }
 
         #if USE_GOOGLE_IMA
-            if _source?.adParams.adTagUrl != nil {
-                // Set up your content playhead and contentComplete callback.
+            if _source?.adParams.isCSAI == true {
                 _contentPlayhead = IMAAVPlayerContentPlayhead(avPlayer: _player!)
-
                 _imaAdsManager.setUpAdsLoader()
             }
         #endif
@@ -609,6 +643,13 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
         let initializeSource = {
             self._source = VideoSource(source)
+
+            #if USE_GOOGLE_IMA
+                if self.isDaiSource() {
+                    self.handleDaiSource()
+                    return
+                }
+            #endif
             if self._source?.uri == nil || self._source?.uri == "" {
                 self._player?.replaceCurrentItem(with: nil)
                 self.isSetSourceOngoing = false
@@ -621,7 +662,11 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                 DebugLog("setSrc Stopping playback")
                 return
             }
-            self.removePlayerLayer()
+
+            // Ensure UI operations are performed on main thread
+            DispatchQueue.main.sync {
+                self.removePlayerLayer()
+            }
             self._playerObserver.player = nil
             self._drmManager = nil
             self._playerObserver.playerItem = nil
@@ -1051,14 +1096,10 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             _playerViewController?.modalPresentationStyle = .fullScreen
 
             // Find the nearest view controller
-            var viewController: UIViewController! = self.firstAvailableUIViewController()
-            if viewController == nil {
-                guard let keyWindow = RCTVideoUtils.getCurrentWindow() else { return }
-
-                viewController = keyWindow.rootViewController
-                if !viewController.children.isEmpty {
-                    viewController = viewController.children.last
-                }
+            var viewController: UIViewController! = RCTPresentedViewController() ?? RCTKeyWindow()?.rootViewController
+            guard viewController != nil else { return }
+            while let presented = viewController.presentedViewController {
+                viewController = presented
             }
             if viewController != nil {
                 _presentingViewController = viewController
@@ -1127,10 +1168,10 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     }
 
     func usePlayerViewController() {
-        guard let _player, let _playerItem else { return }
+        guard let _player else { return }
 
         if _playerViewController == nil {
-            _playerViewController = createPlayerViewController(player: _player, withPlayerItem: _playerItem)
+            _playerViewController = createPlayerViewController(player: _player)
         }
         // to prevent video from being animated when resizeMode is 'cover'
         // resize mode must be set before subview is added
@@ -1154,7 +1195,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         _playerObserver.playerViewController = _playerViewController
     }
 
-    func createPlayerViewController(player: AVPlayer, withPlayerItem _: AVPlayerItem) -> RCTVideoPlayerViewController {
+    func createPlayerViewController(player: AVPlayer) -> RCTVideoPlayerViewController {
         let viewController = RCTVideoPlayerViewController()
         viewController.showsPlaybackControls = self._controls
         #if !os(tvOS)
@@ -1167,15 +1208,12 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         viewController.player = player
 
         // Set the initial playback speed in controls to match playback rate
-        if #available(iOS 16.0, *) {
+        if #available(iOS 16.0, tvOS 16.0, *) {
             if let initialSpeed = viewController.speeds.first(where: { $0.rate == _rate }) {
                 viewController.selectSpeed(initialSpeed)
             }
         }
 
-        if #available(iOS 9.0, tvOS 14.0, *) {
-            viewController.allowsPictureInPicturePlayback = _enterPictureInPictureOnLeave
-        }
         return viewController
     }
 
@@ -1206,15 +1244,24 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     func setControls(_ controls: Bool) {
         if _controls != controls || ((_playerLayer == nil) && (_playerViewController == nil)) {
             _controls = controls
+            #if os(iOS)
+                if !isPictureInPictureActive() {
+                    _pip?.deinitPipController()
+                }
+            #endif
             if _controls {
-                self.removePlayerLayer()
-                self.usePlayerViewController()
+                DispatchQueue.main.async {
+                    self.removePlayerLayer()
+                    self.usePlayerViewController()
+                }
             } else {
-                _playerViewController?.view.removeFromSuperview()
-                _playerViewController?.removeFromParent()
-                _playerViewController = nil
-                _playerObserver.playerViewController = nil
-                self.usePlayerLayer()
+                DispatchQueue.main.async {
+                    self._playerViewController?.view.removeFromSuperview()
+                    self._playerViewController?.removeFromParent()
+                    self._playerViewController = nil
+                    self._playerObserver.playerViewController = nil
+                    self.usePlayerLayer()
+                }
             }
         }
     }
@@ -1311,6 +1358,17 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
 
     func getAdTagUrl() -> String? {
         return _source?.adParams.adTagUrl
+    }
+
+    func getPip() -> RCTPictureInPicture? {
+        initPictureinPicture()
+        return _pip
+    }
+
+    /// Returns whether background playback should be enabled for IMA DAI SDK.
+    /// Used to configure `IMASettings.enableBackgroundPlayback` which is required for DAI streams
+    func shouldEnableBackgroundPlayback() -> Bool {
+        return _playInBackground || _enterPictureInPictureOnLeave
     }
 
     #if USE_GOOGLE_IMA
@@ -1578,15 +1636,15 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
                         "" : (_playerItem.error! as NSError).localizedFailureReason) ?? "",
                     "localizedRecoverySuggestion": ((_playerItem.error! as NSError).localizedRecoverySuggestion == nil ?
                         "" : (_playerItem.error! as NSError).localizedRecoverySuggestion) ?? "",
-                    "domain": (_playerItem.error as! NSError).domain,
+                    "domain": (_playerItem.error as NSError?)?.domain ?? "",
                 ],
                 "target": reactTag as Any,
             ]
         )
     }
 
-    func handlePlaybackBufferKeyEmpty(playerItem _: AVPlayerItem, change _: NSKeyValueObservedChange<Bool>) {
-        if !_isBuffering {
+    func handlePlaybackBufferKeyEmpty(playerItem _: AVPlayerItem, change: NSKeyValueObservedChange<Bool>) {
+        if !_isBuffering && change.newValue == true {
             _isBuffering = true
         }
     }
@@ -1663,30 +1721,27 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         guard let bounds = RCTVideoUtils.getCurrentWindow()?.bounds else { return }
 
         if !oldRect!.equalTo(newRect!) {
-            // https://github.com/TheWidlarzGroup/react-native-video/issues/3085#issuecomment-1557293391
-            if newRect!.equalTo(bounds) {
-                RCTLog("in fullscreen")
-                if !_fullscreenUncontrolPlayerPresented {
-                    _fullscreenUncontrolPlayerPresented = true
-
-                    self.onVideoFullscreenPlayerWillPresent?(["target": self.reactTag as Any])
-                    self.onVideoFullscreenPlayerDidPresent?(["target": self.reactTag as Any])
-                }
-            } else {
-                NSLog("not fullscreen")
-                if _fullscreenUncontrolPlayerPresented {
-                    _fullscreenUncontrolPlayerPresented = false
-
-                    self.onVideoFullscreenPlayerWillDismiss?(["target": self.reactTag as Any])
-                    self.onVideoFullscreenPlayerDidDismiss?(["target": self.reactTag as Any])
-                }
-            }
-
             if let reactVC = self.reactViewController() {
                 reactVC.view.frame = bounds
                 reactVC.view.setNeedsLayout()
             }
         }
+    }
+
+    func handleWillEnterFullScreen() {
+        self.onVideoFullscreenPlayerWillPresent?(["target": self.reactTag as Any])
+    }
+
+    func handleDidEnterFullScreen() {
+        self.onVideoFullscreenPlayerDidPresent?(["target": self.reactTag as Any])
+    }
+
+    func handleWillExitFullScreen() {
+        self.onVideoFullscreenPlayerWillDismiss?(["target": self.reactTag as Any])
+    }
+
+    func handleDidExitFullScreen() {
+        self.onVideoFullscreenPlayerDidDismiss?(["target": self.reactTag as Any])
     }
 
     @objc
@@ -1790,32 +1845,48 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         }
     }
 
-    @objc
-    func enterPictureInPicture() {
-        if _pip?._pipController == nil {
-            initPictureinPicture()
-            if #available(iOS 9.0, tvOS 14.0, *) {
-                _playerViewController?.allowsPictureInPicturePlayback = true
+    private func findPlayerLayer(in view: UIView) -> AVPlayerLayer? {
+        if let layer = view.layer as? AVPlayerLayer {
+            return layer
+        }
+        for sublayer in view.layer.sublayers ?? [] {
+            if let playerLayer = sublayer as? AVPlayerLayer {
+                return playerLayer
             }
         }
-        _pip?.enterPictureInPicture()
+        for subview in view.subviews {
+            if let playerLayer = findPlayerLayer(in: subview) {
+                return playerLayer
+            }
+        }
+        return nil
+    }
+
+    @objc
+    func enterPictureInPicture() {
+        #if os(iOS)
+            if _pip == nil {
+                initPictureinPicture()
+            }
+
+            if _pip?._pipController == nil, let playerViewController = _playerViewController, _controls {
+                if let existingPlayerLayer = findPlayerLayer(in: playerViewController.view) {
+                    _pip?.setupPipController(existingPlayerLayer)
+                }
+            }
+
+            _pip?.enterPictureInPicture()
+        #endif
     }
 
     @objc
     func exitPictureInPicture() {
         guard isPictureInPictureActive() else { return }
-
         _pip?.exitPictureInPicture()
         if _enterPictureInPictureOnLeave {
             initPictureinPicture()
-            if #available(iOS 9.0, tvOS 14.0, *) {
-                _playerViewController?.allowsPictureInPicturePlayback = true
-            }
         } else {
             _pip?.deinitPipController()
-            if #available(iOS 9.0, tvOS 14.0, *) {
-                _playerViewController?.allowsPictureInPicturePlayback = false
-            }
         }
     }
 
@@ -1823,3 +1894,186 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     @objc
     func setOnClick(_: Any) {}
 }
+
+// MARK: - DAI Support
+
+#if USE_GOOGLE_IMA
+    extension RCTVideo: IMAAVPlayerVideoDisplayDelegate {
+        /// Checks if the current source is a DAI (Dynamic Ad Insertion) request.
+        ///
+        /// Returns `true` if either:
+        /// - VOD request: both `contentSourceId` and `videoId` are present
+        func isDaiSource() -> Bool {
+            return _source?.adParams.isDAI ?? false
+        }
+
+        func isDAIVod() -> Bool {
+            return _source?.adParams.isDAIVod ?? false
+        }
+
+        func isDAILive() -> Bool {
+            return _source?.adParams.isDAILive ?? false
+        }
+
+        func getContentSourceId() -> String? {
+            return _source?.adParams.contentSourceId
+        }
+
+        func getAssetKey() -> String? {
+            return _source?.adParams.assetKey
+        }
+
+        func getVideoId() -> String? {
+            return _source?.adParams.videoId
+        }
+
+        func getAdTagParameters() -> [String: String]? {
+            return _source?.adParams.adTagParameters
+        }
+
+        func getBackupStreamUri() -> String? {
+            return _source?.adParams.fallbackUri
+        }
+
+        /// Returns the IMA video display instance used for DAI playback.
+        func getIMAVideoDisplay() -> IMAVideoDisplay? {
+            return _imaVideoDisplay
+        }
+
+        /// Sets up DAI (Dynamic Ad Insertion) by preparing the player, setting up the DAI loader, and requesting the stream.
+        /// This method must be called on the main thread as it performs UI operations.
+        func handleDaiSource() {
+            DispatchQueue.main.sync {
+                removePlayerLayer()
+
+                _playerObserver.player = nil
+                _playerObserver.playerItem = nil
+                _drmManager = nil
+
+                preparePlayerForDai()
+
+                _imaVideoDisplay = IMAAVPlayerVideoDisplay(avPlayer: _player!)
+                _imaVideoDisplay?.playerVideoDisplayDelegate = self
+
+                if _controls {
+                    usePlayerViewController()
+                } else {
+                    usePlayerLayer()
+                }
+
+                _imaAdsManager.setupDaiLoader()
+                _imaAdsManager.requestDaiStream()
+
+                _videoLoadStarted = true
+            }
+        }
+
+        /// Prepares the AVPlayer for DAI playback by initializing or resetting the player configuration.
+        func preparePlayerForDai() {
+            if !isSetSourceOngoing {
+                DebugLog("setSrc has been canceled last step")
+                return
+            }
+
+            if _player == nil {
+                _player = AVPlayer()
+                ReactNativeVideoManager.shared.onInstanceCreated(id: instanceId, player: _player as Any)
+            }
+
+            _player!.pause()
+            _player!.replaceCurrentItem(with: nil)
+            _player!.actionAtItemEnd = .none
+
+            if #available(iOS 10.0, *) {
+                _player!.automaticallyWaitsToMinimizeStalling = _automaticallyWaitsToMinimizeStalling
+            }
+
+            if #available(iOS 15.0, *) {
+                if _playInBackground {
+                    _player!.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+                } else {
+                    _player!.audiovisualBackgroundPlaybackPolicy = .automatic
+                }
+            }
+
+            _playerObserver.player = _player
+        }
+
+        /// Sets up the player item with all item-specific configurations for DAI playback.
+        ///
+        /// This method should be called after `preparePlayerForDai()` when a player item becomes available.
+        ///
+        /// - Parameter playerItem: The AVPlayerItem to configure and set on the player
+        func setupDaiPlayerItem(_ playerItem: AVPlayerItem) async throws {
+            if !isSetSourceOngoing {
+                DebugLog("setSrc has been canceled last step")
+                return
+            }
+
+            guard let _player else {
+                throw NSError(domain: "RCTVideo", code: -1, userInfo: [NSLocalizedDescriptionKey: "Player not initialized. Call preparePlayerForDai() first."])
+            }
+
+            _playerItem = playerItem
+            _playerObserver.playerItem = _playerItem
+
+            setPreferredForwardBufferDuration(_preferredForwardBufferDuration)
+            setPlaybackRange(playerItem, withCropStart: _source?.cropStart, withCropEnd: _source?.cropEnd)
+            setFilter(_filterName)
+            if let maxBitRate = _maxBitRate {
+                _playerItem?.preferredPeakBitRate = Double(maxBitRate)
+            }
+
+            _player.replaceCurrentItem(with: playerItem)
+
+            #if !os(tvOS) && !os(visionOS)
+                if #available(iOS 16.0, macCatalyst 18.0, *) {
+                    self._playerViewController?.allowsVideoFrameAnalysis = false
+                    self._playerViewController?.allowsVideoFrameAnalysis = true
+                }
+            #endif
+
+            if _showNotificationControls {
+                NowPlayingInfoCenterManager.shared.registerPlayer(player: _player)
+            } else {
+                NowPlayingInfoCenterManager.shared.updateNowPlayingInfo()
+            }
+
+            applyModifiers()
+
+            isSetSourceOngoing = false
+            applyNextSource()
+        }
+
+        /// Called when the IMA video display loads a player item for DAI playback.
+        ///
+        /// This delegate method is invoked by the IMA SDK when the DAI stream player item is ready.
+        /// It sets up the player item and applies all necessary modifiers.
+        ///
+        /// - Parameters:
+        ///   - playerVideoDisplay: The IMA video display instance
+        ///   - playerItem: The AVPlayerItem loaded by the IMA SDK
+        func playerVideoDisplay(_: IMAAVPlayerVideoDisplay,
+                                didLoad playerItem: AVPlayerItem) {
+            RCTVideoUtils.delay { [weak self] in
+                do {
+                    guard let self else { throw NSError(domain: "", code: 0, userInfo: nil) }
+
+                    try await self.setupDaiPlayerItem(playerItem)
+                } catch {
+                    DebugLog("An error occurred: \(error.localizedDescription)")
+
+                    if let self {
+                        self.onVideoError?(["error": error.localizedDescription])
+                        self.isSetSourceOngoing = false
+                        self.applyNextSource()
+
+                        if let player = self._player {
+                            NowPlayingInfoCenterManager.shared.removePlayer(player: player)
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif

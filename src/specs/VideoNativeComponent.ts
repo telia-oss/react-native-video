@@ -27,8 +27,16 @@ type VideoMetadata = Readonly<{
 }>;
 
 export type AdsConfig = Readonly<{
+  type?: string;
+  streamType?: string;
   adTagUrl?: string;
   adLanguage?: string;
+  contentSourceId?: string;
+  videoId?: string;
+  assetKey?: string;
+  format?: string;
+  adTagParameters?: Record<string, string>;
+  fallbackUri?: string;
 }>;
 
 export type VideoSrc = Readonly<{
@@ -199,7 +207,7 @@ export type OnBandwidthUpdateData = Readonly<{
   bitrate: Int32;
   width?: Float;
   height?: Float;
-  trackId?: Int32;
+  trackId?: string;
 }>;
 
 export type OnSeekData = Readonly<{
@@ -253,7 +261,7 @@ export type OnTextTrackDataChangedData = Readonly<{
 export type OnVideoTracksData = Readonly<{
   videoTracks: {
     index: Int32;
-    tracksId?: string;
+    trackId?: string;
     codecs?: string;
     width?: Float;
     height?: Float;
@@ -303,6 +311,7 @@ export type OnVideoErrorData = Readonly<{
     localizedRecoverySuggestion?: string; // ios
     domain?: string; // ios
   }>;
+  cause?: object; // React Native convertThrowableToJSError/convertNSExceptionToJSError
   target?: Int32; // ios
 }>;
 
