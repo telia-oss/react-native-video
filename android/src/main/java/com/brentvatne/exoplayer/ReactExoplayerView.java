@@ -2147,6 +2147,7 @@ public class ReactExoplayerView extends FrameLayout implements
                     TrackGroupArray groups = info.getTrackGroups(textRendererIndex);
                     boolean trackFound = false;
                     
+                    int currentTrackIndex = 0;
                     for (int groupIndex = 0; groupIndex < groups.length; groupIndex++) {
                         TrackGroup group = groups.get(groupIndex);
                         for (int trackIndex = 0; trackIndex < group.length; trackIndex++) {
@@ -2159,7 +2160,7 @@ public class ReactExoplayerView extends FrameLayout implements
                                 isMatch = true;
                             } else if ("index".equals(type)) {
                                 int targetIndex = ReactBridgeUtils.safeParseInt(value, -1);
-                                if (targetIndex == trackIndex) {
+                                if (targetIndex == currentTrackIndex) {
                                     isMatch = true;
                                 }
                             }
@@ -2171,6 +2172,8 @@ public class ReactExoplayerView extends FrameLayout implements
                                 trackFound = true;
                                 break;
                             }
+
+                            currentTrackIndex++;
                         }
                         if (trackFound) break;
                     }
