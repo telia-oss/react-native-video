@@ -5,7 +5,7 @@ let RCTVideoUnset = -1
 
 // MARK: - RCTPlayerOperations
 
-/*!
+/** !
  * Collection of mutating functions
  */
 enum RCTPlayerOperations {
@@ -144,7 +144,9 @@ enum RCTPlayerOperations {
             return
         }
 
-        if !paused { player.pause() }
+        if !paused {
+            player.pause()
+        }
 
         player.seek(
             to: cmSeekTime, toleranceBefore: tolerance, toleranceAfter: tolerance,

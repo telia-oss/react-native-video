@@ -26,7 +26,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     private var _pendingSeekTime: Float = 0.0
     private var _lastSeekTime: Float = 0.0
 
-    /* For sending videoProgress events */
+    /** For sending videoProgress events */
     private var _controls = false
 
     /* Keep track of any modifiers, need to be applied after each play */
@@ -65,7 +65,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     private var _lastBitrate = -2.0
     private var _enterPictureInPictureOnLeave = false {
         didSet {
-            if isPictureInPictureActive() { return }
+            if isPictureInPictureActive() {
+                return
+            }
             if _enterPictureInPictureOnLeave {
                 initPictureinPicture()
             } else {
@@ -85,9 +87,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     /* IMA Ads */
     #if USE_GOOGLE_IMA
         private var _imaAdsManager: RCTIMAAdsManager!
-        /* Playhead used by the SDK to track content video progress and insert mid-rolls. */
+        /** Playhead used by the SDK to track content video progress and insert mid-rolls. */
         private var _contentPlayhead: IMAAVPlayerContentPlayhead?
-        /* The reference of your video player for the IMA DAI SDK to monitor playback and handle timed metadata */
+        /** The reference of your video player for the IMA DAI SDK to monitor playback and handle timed metadata */
         private var _imaVideoDisplay: IMAAVPlayerVideoDisplay?
     #endif
     private var _didRequestAds = false
@@ -341,7 +343,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     @objc
     func applicationWillResignActive(notification _: NSNotification!) {
         let isExternalPlaybackActive = getIsExternalPlaybackActive()
-        if _playInBackground || _playWhenInactive || !_isPlaying || isExternalPlaybackActive { return }
+        if _playInBackground || _playWhenInactive || !_isPlaying || isExternalPlaybackActive {
+            return
+        }
 
         _player?.pause()
         _player?.rate = 0.0
@@ -350,7 +354,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     @objc
     func applicationDidBecomeActive(notification _: NSNotification!) {
         let isExternalPlaybackActive = getIsExternalPlaybackActive()
-        if _playInBackground || _playWhenInactive || !_isPlaying || isExternalPlaybackActive { return }
+        if _playInBackground || _playWhenInactive || !_isPlaying || isExternalPlaybackActive {
+            return
+        }
 
         // Resume the player or any other tasks that should continue when the app becomes active.
         _player?.play()
@@ -364,7 +370,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             _player?.rate = _rate
         }
         let isExternalPlaybackActive = getIsExternalPlaybackActive()
-        if !_playInBackground || isExternalPlaybackActive || isPictureInPictureActive() { return }
+        if !_playInBackground || isExternalPlaybackActive || isPictureInPictureActive() {
+            return
+        }
         // Needed to play sound in background. See https://developer.apple.com/library/ios/qa/qa1668/_index.html
         _playerLayer?.player = nil
         _playerViewController?.player = nil
@@ -380,7 +388,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     @objc
     func screenWillLock() {
         let isActiveBackgroundPip = isPictureInPictureActive() && UIApplication.shared.applicationState != .active
-        if _playInBackground || !_isPlaying || !isActiveBackgroundPip { return }
+        if _playInBackground || !_isPlaying || !isActiveBackgroundPip {
+            return
+        }
 
         _player?.pause()
         _player?.rate = 0.0
@@ -389,7 +399,9 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
     @objc
     func screenDidUnlock() {
         let isActiveBackgroundPip = isPictureInPictureActive() && UIApplication.shared.applicationState != .active
-        if _paused || !isActiveBackgroundPip { return }
+        if _paused || !isActiveBackgroundPip {
+            return
+        }
 
         _player?.play()
         _player?.rate = _rate
@@ -1505,7 +1517,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         ])
     }
 
-    // When timeMetadata is read the event onTimedMetadata is triggered
+    /// When timeMetadata is read the event onTimedMetadata is triggered
     func handleTimeMetadataChange(timedMetadata: [AVMetadataItem]) {
         guard onTimedMetadata != nil else { return }
 
@@ -1525,7 +1537,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         ])
     }
 
-    // Handle player item status change.
+    /// Handle player item status change.
     func handlePlayerItemStatusChange(playerItem _: AVPlayerItem, change _: NSKeyValueObservedChange<AVPlayerItem.Status>) {
         guard let _playerItem else {
             return
@@ -1544,12 +1556,11 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
             return nil
         }
         // Map each enumerated pair to include the index in the json dictionary
-        let mappedTracks = tracks.enumerated().compactMap { index, track -> NSDictionary? in
+        return tracks.enumerated().compactMap { index, track -> NSDictionary? in
             guard let json = track.json?.mutableCopy() as? NSMutableDictionary else { return nil }
             json["index"] = index // Insert the index into the json dictionary
             return json
         }
-        return mappedTracks
     }
 
     func handleReadyToPlay() {
@@ -1649,7 +1660,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         }
     }
 
-    // Continue playing (or not if paused) after being paused due to hitting an unbuffered zone.
+    /// Continue playing (or not if paused) after being paused due to hitting an unbuffered zone.
     func handlePlaybackLikelyToKeepUp(playerItem _: AVPlayerItem, change _: NSKeyValueObservedChange<Bool>) {
         if _isBuffering {
             _isBuffering = false
@@ -1890,7 +1901,7 @@ class RCTVideo: UIView, RCTVideoPlayerViewControllerDelegate, RCTPlayerObserverH
         }
     }
 
-    // Workaround for #3418 - https://github.com/TheWidlarzGroup/react-native-video/issues/3418#issuecomment-2043508862
+    /// Workaround for #3418 - https://github.com/TheWidlarzGroup/react-native-video/issues/3418#issuecomment-2043508862
     @objc
     func setOnClick(_: Any) {}
 }

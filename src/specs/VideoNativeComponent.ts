@@ -334,6 +334,7 @@ type ControlsStyles = Readonly<{
   hideSettingButton?: WithDefault<boolean, true>;
   seekIncrementMS?: Int32;
   liveLabel?: string;
+  hideLiveBadge?: WithDefault<boolean, false>;
 }>;
 
 export type OnControlsVisibilityChange = Readonly<{
